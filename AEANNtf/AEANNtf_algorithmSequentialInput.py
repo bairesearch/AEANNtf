@@ -32,8 +32,6 @@ import ANNtf2_operations
 import ANNtf2_globalDefs
 import copy
 
-#FUTURE; consider apply independent AEANNs as filters across subsets of sentences (ie phrases)
-
 spacyWordVectorGenerator = spacy.load('en_core_web_md')	#spacy.load('en_core_web_lg')
 	#python3 -m spacy download en_core_web_md
 	
@@ -41,33 +39,68 @@ networkEqualInputVectorDimensions = True	#equal input vector dimensions per AEAN
 
 debugFastTrain = False
 
+setInputIndependently = True	#set input external to propagation function
+
 verticalConnectivity = True
 if(verticalConnectivity):
 	verticalAutoencoder = True	#specification implementation
-lateralConnectivity = True
+else:
+	verticalAutoencoder = False
+	
+lateralConnectivity = False
 if(lateralConnectivity):
 	lateralSemisupervised = True	#specification implementation
 	lateralAutoencoder = True 	#specification optional (else train lateral connections using semi-supervised method exclusively based on next word prediction)
 	lateralConnectivityFirstLayer = False	#not currently supported #optional (first layer has lateral connections; else just pass x input straight to first layer; layer0 becomes redundant)
+else:
+	lateralAutoencoder = False
 	
-supportFullConnectivity = True #mandatory	#full connectivity between layers (else only predict current layer based on previous layer); is required because equivalent semantic structure do not necessarily contain the same number of words per phrase (ie syntactical structure is not necessarily identical)
-if(supportFullConnectivity):
-	supportSkipLayers = True #mandatory
+supportFullLayerConnectivity = False 	#aka supportSkipLayers	#optional	#full connectivity between layers (else only predict current layer based on previous layer); is required because equivalent semantic structure do not necessarily contain the same number of words per phrase (ie syntactical structure is not necessarily identical)
+if(supportFullLayerConnectivity):
+	supportFullSequentialConnectivity =  True	#optional
+else:
+	supportFullSequentialConnectivity = False	
 
+calculateLossAcrossAllActivations = False
+supportSequentialConnectivityIndependentWeightsAbsolute = False
+if(supportFullLayerConnectivity):
+	calculateLossAcrossAllActivations = True	#optional? used to generalise the loss calculation process across entire network activations
+	supportSequentialConnectivityIndependentWeightsAbsolute = True	#optional
+if(supportFullSequentialConnectivity):
+	calculateLossAcrossAllActivations = True	#optional? used to generalise the loss calculation process across entire network activations
+	supportSequentialConnectivityIndependentWeightsAbsolute = True	#optional	#absolute s independence
+	supportSequentialConnectivityIndependentWeightsRelative = False
+else:
+	supportSequentialConnectivityIndependentWeightsAbsolute = False
+	supportSequentialConnectivityIndependentWeightsRelative	= True	#optional #relative s independence	#recommended such that network can still distinguish between current and previous input
+	verticalPropagationInfluentialSequenceSizeAll = False
+	lateralPropagationInfluentialSequenceSizeAll = False
 
 #see AEANN-AutoencoderSequentialInputArchitectureDevelopment-29December2021a.pdf;
 #FUTURE: consider creating independent weights for s1 (higher layer sequential index) also
-if(supportSkipLayers):
+if(supportFullLayerConnectivity):
 	#increase generalisation across minor syntactical structure variations
-	verticalPropagationInfluentialSequenceSizeAll = True	#specification (green): do not limit sequential influence of (skip layer) vertical propagation to prior sequential input (and its recursive influencers)
-	lateralPropagationInfluentialSequenceSizeAll = True	#specification (cyan): do not limit sequential influence of (skip layer) lateral propagation to prior sequential input (and its recursive influencers)
-	verticalPropagationInfluentialSequenceIndependentWeights = True	#optional (may prevent generalisation across minor syntactical structure variations)
-	lateralPropagationInfluentialSequenceIndependentWeights = True	#optional (may prevent generalisation across minor syntactical structure variations)
+	if(supportFullSequentialConnectivity):
+		#FUTURE; consider apply independent AEANNs as filters across subsets of sentences (ie phrases)
+		verticalPropagationInfluentialSequenceSizeAll = True	#specification (green): do not limit sequential influence of (skip layer) vertical propagation to prior sequential input (and its recursive influencers)
+		lateralPropagationInfluentialSequenceSizeAll = True	#specification (cyan): do not limit sequential influence of (skip layer) lateral propagation to prior sequential input (and its recursive influencers)	
+	if(supportSequentialConnectivityIndependentWeightsAbsolute):
+		verticalPropagationInfluentialSequenceIndependentWeights = True	#optional (may prevent generalisation across minor syntactical structure variations)
+		lateralPropagationInfluentialSequenceIndependentWeights = True	#optional (may prevent generalisation across minor syntactical structure variations)
+	if(supportSequentialConnectivityIndependentWeightsRelative):
+		verticalPropagationInfluentialSequenceIndependentWeights = True	#optional
+		lateralPropagationInfluentialSequenceIndependentWeights = False
 else:
-	verticalPropagationInfluentialSequenceSizeAll = False #specification (orange): do not limit sequential influence of vertical propagation to prior sequential input	#False: mandatory - cannot be higher than 2 because last layer only has access to [the last] 2 sequential inputs?
-	lateralPropagationInfluentialSequenceSizeAll = False #specification (blue): do not limit sequential influence of lateral propagation to prior sequential input	#optional?
-	verticalPropagationInfluentialSequenceIndependentWeights = True	#optional (may prevent generalisation across minor syntactical structure variations)
-	lateralPropagationInfluentialSequenceIndependentWeights = True	#optional (may prevent generalisation across minor syntactical structure variations)
+	if(supportFullSequentialConnectivity):
+		verticalPropagationInfluentialSequenceSizeAll = False #specification (orange): do not limit sequential influence of vertical propagation to prior sequential input	#False: mandatory - cannot be higher than 2 because last layer only has access to [the last] 2 sequential inputs?
+		lateralPropagationInfluentialSequenceSizeAll = False #specification (blue): do not limit sequential influence of lateral propagation to prior sequential input	#optional?
+	if(supportSequentialConnectivityIndependentWeightsAbsolute):
+		verticalPropagationInfluentialSequenceIndependentWeights = True	#optional (may prevent generalisation across minor syntactical structure variations)
+		lateralPropagationInfluentialSequenceIndependentWeights = True	#optional (may prevent generalisation across minor syntactical structure variations)
+	if(supportSequentialConnectivityIndependentWeightsRelative):
+		verticalPropagationInfluentialSequenceIndependentWeights = True	#optional
+		lateralPropagationInfluentialSequenceIndependentWeights = False
+
 
 neuronsPerLayerMultiplier = 1	#CHECKTHIS
 
@@ -86,8 +119,9 @@ B = {}	#bias
 #support sequential inputs:
 Ztrace = {}
 Atrace = {}
-ZtraceBackward = {}
-AtraceBackward = {}
+if(calculateLossAcrossAllActivations):
+	ZtraceBackward = {}
+	AtraceBackward = {}
 
 #Network parameters
 networks_n_h = []	#list of n_h for every network
@@ -102,18 +136,24 @@ learningRate = None	#not required (as all learning is currently performed extern
 batchSize = None	#not required; can be inline rederived from x/activation arrays 
 paddingTagIndex = None	#required to prevent passing parameter locally
 	
-def neuralNetworkPropagationTestGenerateHigherLayerWordVectors(networkIndex, batchX):
+def neuralNetworkPropagationTestGenerateHigherLayerInputVector(networkIndex, batchX):
 	if(networkEqualInputVectorDimensions):
 		#return highest layer processed for each batch
-		#batchSize = x.shape[0]
-		numberOfSequentialInputs = x.shape[1]
+		#batchSize = x.shape[0]	#already set
+		#print("batchSize = ", batchSize)
+		#print("batchX = ", batchX)
+		numberOfSequentialInputs = batchX.shape[1]
+		#print("numberOfSequentialInputs = ", numberOfSequentialInputs)
 		networkOutputLayerList = []
 		for batchIndex in range(batchSize):
+			#print("batchX[batchIndex] = ", batchX[batchIndex])
 			s = getNumberValidSequentialInputs(batchX[batchIndex])
+			#print("s = ", s)
 			l = getNumberLayers2(s)
 			networkOutputLayer = Atrace[generateParameterNameNetworkSeq(networkIndex, l, s, "Atrace")]
+			networkOutputLayer = networkOutputLayer[batchIndex]
 			networkOutputLayerList.append(networkOutputLayer)
-		higherLayerInputVectors = tf.stack(networkOutputLayerList)
+		higherLayerInputVectors = tf.stack(networkOutputLayerList)	#expected shape: batchSize x inputVecDimensions
 	else:
 		print("neuralNetworkPropagationTestGenerateHigherLayerWordVectors error: currently requires networkEqualInputVectorDimensions")
 		exit()
@@ -122,7 +162,11 @@ def neuralNetworkPropagationTestGenerateHigherLayerWordVectors(networkIndex, bat
 	
 def getNumberValidSequentialInputs(sequenceTensor):
 	sequenceTensorIsPadding = tf.equal(sequenceTensor, paddingTagIndex)
-	numberValidSequentialInputs = tf.argmax(sequenceTensorIsPadding, axis=0)
+	numberValidSequentialInputs = tf.argmax(sequenceTensorIsPadding, axis=0)	#will create an array with identical values for every index in inputVector
+	numberValidSequentialInputs = numberValidSequentialInputs[0]	#get any (eg first) value within this array
+	numberValidSequentialInputs = numberValidSequentialInputs + 1	#number of non-padding elements
+	numberValidSequentialInputs = numberValidSequentialInputs.numpy()
+	return numberValidSequentialInputs
 
 def getAtraceTarget(networkIndex):
 	#print("getAtraceTarget")
@@ -134,7 +178,8 @@ def initialiseAtrace(networkIndex):
 			Ztrace[generateParameterNameNetworkSeq(networkIndex, l1, s, "Ztrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
 			Atrace[generateParameterNameNetworkSeq(networkIndex, l1, s, "Atrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
 			#print("initialiseAtrace Atrace.shape = ", Atrace[generateParameterNameNetworkSeq(networkIndex, l1, s, "Atrace")].shape)	
-					
+
+#if(calculateLossAcrossAllActivations):				
 def initialiseAtraceBackward(networkIndex):
 	for l1 in range(1, numberOfLayers+1):
 		for s in range(numberOfSequentialInputs):
@@ -205,6 +250,7 @@ def generateWordVectorInputList(textContentList, AEANNsequentialInputDimensions,
 	
 def getNumNetworkNodes(sequentialInputMaxLength):
 	numNetworkNodes = sequentialInputMaxLength*getNumberLayers2(sequentialInputMaxLength)*neuronsPerLayerMultiplier	#CHECKTHIS
+	return numNetworkNodes
 
 def setNetworkIndex(networkIndex):
 	global n_h
@@ -229,9 +275,11 @@ def getNumberSequentialInputs(n_h):
 	
 def getSequentialInputMaxPropagationLayer(s):
 	sequentialInputMaxPropagationLayer = s+1	#CHECKTHIS
+	return sequentialInputMaxPropagationLayer
 	
 def getMinSequentialInputOfLayer(l):
 	minSequentialInputOfLayer = l-1	#CHECKTHIS
+	return minSequentialInputOfLayer
 	
 #note high batchSize is required for learningAlgorithmStochastic algorithm objective functions (>= 100)
 def defineTrainingParameters(dataset, paddingTagIndexSet):
@@ -281,7 +329,7 @@ def defineNetworkParametersAEANN(AEANNsequentialInputTypesMaxLength, AEANNsequen
 		n_h = []
 		n_x = AEANNsequentialInputTypesVectorDimensions[networkIndex] #datasetNumFeatures
 		n_y = AEANNsequentialInputTypesVectorDimensions[networkIndex] 	#datasetNumClasses
-		numberOfLayers = AEANNsequentialInputTypesMaxLength[networkIndex]
+		numberOfLayers = getNumberLayers2(AEANNsequentialInputTypesMaxLength[networkIndex])
 		
 		n_h.append(n_x)
 		for l in range(1, numberOfLayers):	#for every hidden layer
@@ -302,23 +350,27 @@ def defineNeuralNetworkParameters():
 	
 	randomNormal = tf.initializers.RandomNormal()
 	
-	print("numberOfNetworks = ", numberOfNetworks)
+	print("defineNeuralNetworkParameters: numberOfNetworks = ", numberOfNetworks)
 	for networkIndex in range(numberOfNetworks):
 		n_h = networks_n_h[networkIndex]	#set active n_h
+		numberOfLayers = getNumberLayers(n_h)
 		
 		for l1 in range(1, numberOfLayers+1):
-			if(supportSkipLayers):
+			if(supportFullLayerConnectivity):
 				if(verticalConnectivity):
 					for l2 in range(1, l1):
 						if(l2 < l1):	#first layer does not have vertical connections (just pass through of sequential input x):
 							#vertical connections are always made from lower to higher layers:
 							if(verticalPropagationInfluentialSequenceIndependentWeights):
-								#store independent weights for each s in sequence (not robust as near identical sequences may have different seq lengths)
-								verticalPropagationInfluentialSequenceSizeMax = getNumberSequentialInputs(n_h) #numberOfLayers-(l1+1)
+								if(supportSequentialConnectivityIndependentWeightsAbsolute):
+									#store independent weights for each s in sequence (not robust as near identical sequences may have different seq lengths)
+									verticalPropagationInfluentialSequenceSizeMax = getNumberSequentialInputs(n_h) #numberOfLayers-(l1+1)
+								elif(supportSequentialConnectivityIndependentWeightsRelative):
+									verticalPropagationInfluentialSequenceSizeMax = 2
 								for s2 in range(verticalPropagationInfluentialSequenceSizeMax):
 									Wf[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wf")] = tf.Variable(randomNormal([n_h[l2], n_h[l1]]))
 									if(verticalAutoencoder):
-										Wb[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wb")] = tf.Variable(randomNormal([n_h[l2], n_h[l1]]))							
+										Wb[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wb")] = tf.Variable(randomNormal([n_h[l2], n_h[l1]]))					
 							else:
 								Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")] = tf.Variable(randomNormal([n_h[l2], n_h[l1]]))
 								if(verticalAutoencoder):
@@ -327,8 +379,11 @@ def defineNeuralNetworkParameters():
 					for l2 in range(l1, numberOfLayers+1):
 						#lateral connections are always made from higher to lower layers:
 						if(lateralPropagationInfluentialSequenceIndependentWeights):
-							#store independent weights for each s in sequence (not robust as near identical sequences may have different seq lengths)
-							lateralPropagationInfluentialSequenceSizeMax = getNumberSequentialInputs(n_h) #numberOfLayers-(l1+1)	#lower layers have more lateral/downward connections [exact number used/trained depends on sequential input index]	#CHECKTHIS
+							if(supportSequentialConnectivityIndependentWeightsAbsolute):
+								#store independent weights for each s in sequence (not robust as near identical sequences may have different seq lengths)
+								lateralPropagationInfluentialSequenceSizeMax = getNumberSequentialInputs(n_h) #numberOfLayers-(l1+1)	#lower layers have more lateral/downward connections [exact number used/trained depends on sequential input index]	#CHECKTHIS		
+							elif(supportSequentialConnectivityIndependentWeightsRelative):
+								print("error: lateralPropagationInfluentialSequenceIndependentWeights and !supportSequentialConnectivityIndependentWeightsAbsolute")				
 							for s2 in range(lateralPropagationInfluentialSequenceSizeMax):
 								Wlf[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wlf")] = tf.Variable(randomNormal([n_h[l2], n_h[l1]]))
 								if(lateralAutoencoder):
@@ -341,8 +396,11 @@ def defineNeuralNetworkParameters():
 				if(verticalConnectivity):
 					if(l1 > 1):	#first layer does not have vertical connections (just pass through of sequential input x):
 						if(verticalPropagationInfluentialSequenceIndependentWeights):
-							#store independent weights for each s in sequence (not robust as near identical sequences may have different seq lengths)
-							verticalPropagationInfluentialSequenceSizeMax = getNumberSequentialInputs(n_h) #numberOfLayers-(l1+1)
+							if(supportSequentialConnectivityIndependentWeightsAbsolute):
+								#store independent weights for each s in sequence (not robust as near identical sequences may have different seq lengths)
+								verticalPropagationInfluentialSequenceSizeMax = getNumberSequentialInputs(n_h) #numberOfLayers-(l1+1)
+							elif(supportSequentialConnectivityIndependentWeightsRelative):
+								verticalPropagationInfluentialSequenceSizeMax = 2
 							for s2 in range(verticalPropagationInfluentialSequenceSizeMax):
 								Wf[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wf")] = tf.Variable(randomNormal([n_h[l1-1], n_h[l1]]))
 								if(verticalAutoencoder):
@@ -353,8 +411,11 @@ def defineNeuralNetworkParameters():
 								Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")] = tf.Variable(randomNormal([n_h[l1-1], n_h[l1]]))
 				if(lateralConnectivity):
 					if(lateralPropagationInfluentialSequenceIndependentWeights):
-						#store independent weights for each s in sequence (not robust as near identical sequences may have different seq lengths)
-						lateralPropagationInfluentialSequenceSizeMax = getNumberSequentialInputs(n_h) #numberOfLayers-(l1+1)	#lower layers have more lateral/downward connections [exact number used/trained depends on sequential input index]	#CHECKTHIS
+						if(supportSequentialConnectivityIndependentWeightsAbsolute):
+							#store independent weights for each s in sequence (not robust as near identical sequences may have different seq lengths)
+							lateralPropagationInfluentialSequenceSizeMax = getNumberSequentialInputs(n_h) #numberOfLayers-(l1+1)	#lower layers have more lateral/downward connections [exact number used/trained depends on sequential input index]	#CHECKTHIS
+						elif(supportSequentialConnectivityIndependentWeightsRelative):
+							print("error: lateralPropagationInfluentialSequenceIndependentWeights and !supportSequentialConnectivityIndependentWeightsAbsolute")
 						for s2 in range(lateralPropagationInfluentialSequenceSizeMax):
 							Wlf[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wlf")] = tf.Variable(randomNormal([n_h[l1], n_h[l1]]))
 							if(lateralAutoencoder):
@@ -365,14 +426,15 @@ def defineNeuralNetworkParameters():
 							Wlb[generateParameterNameNetwork(networkIndex, l1, "Wlb")] = tf.Variable(randomNormal([n_h[l1], n_h[l1]]))
 
 			Blayer = tf.zeros(n_h[l1])	
-			B[generateParameterNameNetwork(networkIndex, l, "B")] = tf.Variable(Blayer)
+			B[generateParameterNameNetwork(networkIndex, l1, "B")] = tf.Variable(Blayer)
 
 			numberOfSequentialInputs = getNumberSequentialInputs(n_h)
 			for s in range(numberOfSequentialInputs):
 				Ztrace[generateParameterNameNetworkSeq(networkIndex, l1, s, "Ztrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
 				Atrace[generateParameterNameNetworkSeq(networkIndex, l1, s, "Atrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
-				ZtraceBackward[generateParameterNameNetworkSeq(networkIndex, l1, s, "ZtraceBackward")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
-				AtraceBackward[generateParameterNameNetworkSeq(networkIndex, l1, s, "AtraceBackward")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
+				if(calculateLossAcrossAllActivations):
+					ZtraceBackward[generateParameterNameNetworkSeq(networkIndex, l1, s, "ZtraceBackward")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
+					AtraceBackward[generateParameterNameNetworkSeq(networkIndex, l1, s, "AtraceBackward")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
 
 			
 
@@ -401,7 +463,6 @@ def neuralNetworkPropagationAEANNsetInput(x, networkIndex):
 	maxSequentialInput = numberOfSequentialInputs-1
 	print("numberOfSequentialInputs = ", numberOfSequentialInputs)
 	
-	#implementation for left->right propagation only (FUTURE: bidirectional implementation required)
 	x = tf.transpose(x, [1, 0, 2])		#numberInputs x batchSize x wordVecSize
 	
 	for s1 in range(minSequentialInput, maxSequentialInput+1, 1):
@@ -412,9 +473,9 @@ def neuralNetworkPropagationAEANNsetInput(x, networkIndex):
 		Ztrace[generateParameterNameNetworkSeq(networkIndex, l=0, s=s1, arrayName="Ztrace")] = xSeq
 		Atrace[generateParameterNameNetworkSeq(networkIndex, l=0, s=s1, arrayName="Atrace")] = xSeq
 		
-		if(lateralConnectivityFirstLayer):
+		if(lateralConnectivity and lateralConnectivityFirstLayer):
 			#not currently supported
-			print("neuralNetworkPropagationAEANNsetInput error: lateralConnectivityFirstLayer not currently supported")
+			print("neuralNetworkPropagationAEANNsetInput error: setInputIndependently: lateralConnectivityFirstLayer not currently supported; layer 1 activations not clearly defined")
 			exit()
 		else:
 			#Optional: first sequential input is not propagated past l1 s0 [asserted for clarity]
@@ -424,6 +485,10 @@ def neuralNetworkPropagationAEANNsetInput(x, networkIndex):
 		
 #x = 3D input array	#batchSize x numberInputs x wordVecSize
 def neuralNetworkPropagationAEANN(x, autoencoder=False, semisupervisedEncoder=False, layerFirst=None, layerLast=None, sequentialInputFirst=None, sequentialInputLast=None, networkIndex=1):
+
+	optimisationRequired = False	
+	output = None
+	outputTarget = None
 	
 	numberOfSequentialInputs = getNumberSequentialInputs(n_h)
 	
@@ -441,20 +506,30 @@ def neuralNetworkPropagationAEANN(x, autoencoder=False, semisupervisedEncoder=Fa
 	else:
 		minLayer = layerFirst
 	
-	if(autoencoder):
+	if(autoencoder and calculateLossAcrossAllActivations):
 		initialiseAtraceBackward(networkIndex)
-		#neuralNetworkPropagationAEANNsetInput(x) has already been executed
-	else:
-		neuralNetworkPropagationAEANNsetInput(x)
-	
+	#assume neuralNetworkPropagationAEANNsetInput(x) has already been executed
+
 	#implementation for left->right propagation only (FUTURE: bidirectional implementation required)
-	#numberOfSequentialInputs = x.shape[1]
-	#x = tf.transpose(x, [1, 0, 2])		#numberInputs x batchSize x wordVecSize
+
+	if(not setInputIndependently):
+		x = tf.transpose(x, [1, 0, 2])		#numberInputs x batchSize x wordVecSize
+
+	#print("neuralNetworkPropagationAEANN: maxSequentialInput = ", maxSequentialInput)
+	
 	for s1 in range(minSequentialInput, maxSequentialInput+1, 1):
-		
+	
+		if(not setInputIndependently):
+			xSeq = x[s1]	#not used (set by  neuralNetworkPropagationAEANNsetInput(x)
+			#initialise input layer 0 as xSeq;
+			Ztrace[generateParameterNameNetworkSeq(networkIndex, l=0, s=s1, arrayName="Ztrace")] = xSeq
+			Atrace[generateParameterNameNetworkSeq(networkIndex, l=0, s=s1, arrayName="Atrace")] = xSeq
+		else:
+			xSeq = None
+			
 		if(s1 != 0):
 			sequentialInputMaxPropagationLayer = getSequentialInputMaxPropagationLayer(s1)
-
+			
 			if(layerLast is None):
 				maxLayer = min(sequentialInputMaxPropagationLayer, numberOfLayers)
 			else:
@@ -464,9 +539,13 @@ def neuralNetworkPropagationAEANN(x, autoencoder=False, semisupervisedEncoder=Fa
 
 			for l1 in range(minLayer, maxLayer+1, 1):
 					
-				Z = neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentialInput, maxLayer, verticalConnectivity, lateralConnectivity, forward=True, autoencoder=False, networkIndex=networkIndex)
+				optimisationRequiredl1, Z, autoencoderOutputTarget = neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentialInput, maxLayer, verticalConnectivity, lateralConnectivity, forward=True, autoencoder=False, networkIndex=networkIndex)
+				if(optimisationRequiredl1):
+					optimisationRequired = True
 				A = activationFunction(Z)
 
+				#print("autoencoderOutputTarget set")
+				
 				#update activation records:
 				Ztrace[generateParameterNameNetworkSeq(networkIndex, l1, s1, "Ztrace")] = Z
 				Atrace[generateParameterNameNetworkSeq(networkIndex, l1, s1, "Atrace")] = A
@@ -476,7 +555,7 @@ def neuralNetworkPropagationAEANN(x, autoencoder=False, semisupervisedEncoder=Fa
 					if(l1 == maxLayer):
 						if(autoencoder):			
 							#propagate backwards to immediately previously connected layer(s);
-							neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentialInput, maxLayer, verticalAutoencoder, lateralAutoencoder, forward=False, autoencoder=True, networkIndex=networkIndex)
+							_, Z, autoencoderOutputPred = neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentialInput, maxLayer, verticalAutoencoder, lateralAutoencoder, forward=False, autoencoder=True, networkIndex=networkIndex)
 						elif(semisupervisedEncoder):
 							print("neuralNetworkPropagationAEANN error: semisupervisedEncoder not yet coded")
 							exit()
@@ -485,47 +564,75 @@ def neuralNetworkPropagationAEANN(x, autoencoder=False, semisupervisedEncoder=Fa
 							output = tf.nn.sigmoid(Z)
 
 				A = tf.stop_gradient(A)	#only train weights for layer l1, sequentialInput s1
-					#CHECKTHIS: are gradients automatically propagated through activation trace arrays?
+					#CHECKTHIS: if(calculateLossAcrossAllActivations): are gradients automatically propagated through activation trace arrays?
 	
-	if(autoencoder):
-		output = getAtraceActivations(True, networkIndex)
+	if(optimisationRequired):
+		if(autoencoder):
+			if(calculateLossAcrossAllActivations):
+				output = getAtraceActivations(True, networkIndex)
+			else:
+				output = autoencoderOutputPred
+				outputTarget = autoencoderOutputTarget
 		
-	return output
+	return optimisationRequired, output, outputTarget
 
 def neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentialInput, maxLayer, vertical, lateral, forward=True, autoencoder=False, networkIndex=0):
+
+	optimisationRequired = False
+	autoencoderOutput = None
 	
 	numberOfSequentialInputs = getNumberSequentialInputs(n_h)
 	Zrecord = Ztrace[generateParameterNameNetworkSeq(networkIndex, l1, s1, "Ztrace")]
 	Z = tf.zeros(Zrecord.shape)	#Z initialisation
 
+	if(not calculateLossAcrossAllActivations):
+		autoencoderOutputList = []
+
 	if(forward):
 		if(l1 == 1):
-			#pass through x input directly to first layer;
-			Zpartial = xSeq
-			tf.add(Z, Zpartial)
-						
+			if(not setInputIndependently):
+				if(lateralConnectivityFirstLayer):
+					#pass through x input directly to first layer;
+					Zpartial = xSeq
+					tf.add(Z, Zpartial)
+					#not currently supported
+					print("neuralNetworkPropagationAEANNsequentialInputLayer error: !setInputIndependently: lateralConnectivityFirstLayer not currently supported; layer 1 activations not clearly defined")
+					exit()
+				Ztrace[generateParameterNameNetworkSeq(networkIndex, l=1, s=s1, arrayName="Ztrace")] = xSeq
+				Atrace[generateParameterNameNetworkSeq(networkIndex, l=1, s=s1, arrayName="Atrace")] = xSeq
+
 	if(vertical):
-		if(supportSkipLayers):
+		#first layer does not have vertical connections (just pass through of sequential input x):
+		if(supportFullLayerConnectivity):
 			l2min = 1
 		else:
-			l2min = l1-1	#ie l2 = l1-1 only
+			l2min = max(1, l1-1)	#ie l2 = l1-1 only
 		for l2 in range(l2min, l1):
-			if(l2 < l1):	#first layer does not have vertical connections (just pass through of sequential input x):
+			if(l2 < l1):
 				#vertical connections are always made from lower to higher layers:
 				if(verticalPropagationInfluentialSequenceSizeAll):
 					s2min = getMinSequentialInputOfLayer(l2)
-					print("supportSkipLayers; verticalPropagationInfluentialSequenceSizeAll: s1 = ", s1, ", l1 = ", l1, ", s2min = ", s2min)	
+					print("supportFullLayerConnectivity; verticalPropagationInfluentialSequenceSizeAll: s1 = ", s1, ", l1 = ", l1, ", s2min = ", s2min)	
 				else:
 					s2min = s1-1	#previous sequential input								
 				s2max = s1	#current sequential input
-				for s2 in range(s2min, s2max+1, 1):
+				for s2Index, s2 in enumerate(range(s2min, s2max+1, 1)):
+					optimisationRequired = True
 					Alayer2 = Atrace[generateParameterNameNetworkSeq(networkIndex, l2, s2, "Atrace")]
-					if(supportSkipLayers):
+					#calculate s2w: s2 weights index (may be different than s2)	
+					if(verticalPropagationInfluentialSequenceIndependentWeights):
+						if(supportSequentialConnectivityIndependentWeightsAbsolute):
+							s2w = s2
+						elif(supportSequentialConnectivityIndependentWeightsRelative):
+							s2w = s2Index
+					else:
+						s2w = None	#not used
+					if(supportFullLayerConnectivity):
 						if(verticalPropagationInfluentialSequenceIndependentWeights):
 							if(forward):
-								Wlayer = Wf[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wf")] 
+								Wlayer = Wf[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2w, "Wf")] 
 							else:
-								Wlayer = Wb[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wb")]	
+								Wlayer = Wb[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2w, "Wb")]	
 						else:
 							if(forward):
 								Wlayer = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")] 
@@ -534,9 +641,9 @@ def neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentia
 					else:
 						if(verticalPropagationInfluentialSequenceIndependentWeights):
 							if(forward):
-								Wlayer = Wf[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wf")] 
+								Wlayer = Wf[generateParameterNameNetworkSeq(networkIndex, l1, s2w, "Wf")] 
 							else:
-								Wlayer = Wb[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wb")] 	
+								Wlayer = Wb[generateParameterNameNetworkSeq(networkIndex, l1, s2w, "Wb")] 	
 						else:
 							if(forward):
 								Wlayer = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")] 
@@ -544,13 +651,19 @@ def neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentia
 								Wlayer = Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")] 							
 					Zpartial = tf.add(tf.matmul(Alayer2, Wlayer), B[generateParameterNameNetwork(networkIndex, l1, "B")])
 					if(forward):
-						tf.add(Z, Zpartial)
+						Z = tf.add(Z, Zpartial)
+						if(not calculateLossAcrossAllActivations):
+							autoencoderOutputList.append(Alayer2)
 					else:
-						Apartial = tf.nn.sigmoid(Zpartial)
-						ZtraceBackward[generateParameterNameNetworkSeq(networkIndex, l2, s2, "ZtraceBackward")] = Zpartial
-						AtraceBackward[generateParameterNameNetworkSeq(networkIndex, l2, s2, "AtraceBackward")] = Apartial	
+						if(calculateLossAcrossAllActivations):
+							Apartial = tf.nn.sigmoid(Zpartial)
+							ZtraceBackward[generateParameterNameNetworkSeq(networkIndex, l2, s2, "ZtraceBackward")] = Zpartial
+							AtraceBackward[generateParameterNameNetworkSeq(networkIndex, l2, s2, "AtraceBackward")] = Apartial	
+						else:
+							Apartial = tf.nn.sigmoid(Zpartial)
+							autoencoderOutputList.append(Apartial)
 	if(lateral):
-		if(supportSkipLayers):
+		if(supportFullLayerConnectivity):
 			l2max = numberOfLayers+1
 		else:
 			l2max = l1	#ie l2 = l only
@@ -559,7 +672,7 @@ def neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentia
 			if(lateralConnectivityFirstLayer or (l1 > 1)):	#if first layer does not have vertical connections (just pass through of sequential input x):
 				if(lateralPropagationInfluentialSequenceSizeAll):
 					s2min = getMinSequentialInputOfLayer(l2)
-					print("supportSkipLayers; lateralPropagationInfluentialSequenceSizeAll: s1 = ", s1, ", l1 = ", l1, ", s2min = ", s2min)
+					print("supportFullLayerConnectivity; lateralPropagationInfluentialSequenceSizeAll: s1 = ", s1, ", l1 = ", l1, ", s2min = ", s2min)
 				else:	
 					if(s1 == numberOfSequentialInputs-1):	#or if(getSequentialInputMaxPropagationLayer(s1) == maxLayer)
 						s2min = s1	#no lateral connections at final layer
@@ -568,14 +681,23 @@ def neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentia
 					else:
 						s2min = s1-1	#previous sequential input
 				s2max = s1-1	#previous sequential input
-				for s2 in range(s2min, s2max+1, 1):
+				for s2Index, s2 in enumerate(range(s2min, s2max+1, 1)):
+					optimisationRequired = True
 					Alayer2 = Atrace[generateParameterNameNetworkSeq(networkIndex, l2, s2, "Atrace")]
-					if(supportSkipLayers):
+					#calculate s2w: s2 weights index (may be different than s2)
+					if(lateralPropagationInfluentialSequenceIndependentWeights):
+						if(supportSequentialConnectivityIndependentWeightsAbsolute):
+							s2w = s2
+						elif(supportSequentialConnectivityIndependentWeightsRelative):
+							s2w = s2Index
+					else:
+						s2w = None	#not used
+					if(supportFullLayerConnectivity):
 						if(lateralPropagationInfluentialSequenceIndependentWeights):
 							if(forward):
-								Wlayer = Wlf[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wlf")] 
+								Wlayer = Wlf[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2w, "Wlf")] 
 							else:
-								Wlayer = Wlb[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wlb")] 
+								Wlayer = Wlb[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2w, "Wlb")] 
 						else:
 							if(forward):
 								Wlayer = Wlf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wlf")] 
@@ -584,9 +706,9 @@ def neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentia
 					else:
 						if(lateralPropagationInfluentialSequenceIndependentWeights):
 							if(forward):
-								Wlayer = Wlf[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wlf")]
+								Wlayer = Wlf[generateParameterNameNetworkSeq(networkIndex, l1, s2w, "Wlf")]
 							else:
-								Wlayer = Wlb[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wlb")]
+								Wlayer = Wlb[generateParameterNameNetworkSeq(networkIndex, l1, s2w, "Wlb")]
 						else:
 							if(forward):
 								Wlayer = Wlf[generateParameterNameNetwork(networkIndex, l1, "Wlf")]
@@ -594,13 +716,24 @@ def neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentia
 								Wlayer = Wlb[generateParameterNameNetwork(networkIndex, l1, "Wlb")]							
 					Zpartial = tf.add(tf.matmul(Alayer2, WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")])
 					if(forward):
-						tf.add(Z, Zpartial)						
+						Z = tf.add(Z, Zpartial)	
+						if(not calculateLossAcrossAllActivations):
+							autoencoderOutputList.append(Alayer2)			
 					else:
-						Apartial = tf.nn.sigmoid(Zpartial)
-						ZtraceBackward[generateParameterNameNetworkSeq(networkIndex, l2, s2, "ZtraceBackward")] = Zpartial
-						AtraceBackward[generateParameterNameNetworkSeq(networkIndex, l2, s2, "AtraceBackward")] = Apartial
+						if(calculateLossAcrossAllActivations):
+							Apartial = tf.nn.sigmoid(Zpartial)
+							ZtraceBackward[generateParameterNameNetworkSeq(networkIndex, l2, s2, "ZtraceBackward")] = Zpartial
+							AtraceBackward[generateParameterNameNetworkSeq(networkIndex, l2, s2, "AtraceBackward")] = Apartial
+						else:
+							Apartial = tf.nn.sigmoid(Zpartial)
+							autoencoderOutputList.append(Apartial)
+
+	if(optimisationRequired):
+		if(not calculateLossAcrossAllActivations):
+			#print("autoencoderOutputList = ", autoencoderOutputList)
+			autoencoderOutput = tf.concat(autoencoderOutputList, axis=0) 
 			
-	return Z
+	return optimisationRequired, Z, autoencoderOutput
 									
 
 def activationFunction(Z):

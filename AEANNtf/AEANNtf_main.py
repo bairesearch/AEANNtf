@@ -42,8 +42,8 @@ import ANNtf2_loadDataset
 
 
 costCrossEntropyWithLogits = False
-algorithmAEANN = "AEANNindependentInput"	#autoencoder generated artificial neural network
-#algorithmAEANN = "AEANNsequentialInput"	#autoencoder generated artificial neural network
+#algorithmAEANN = "AEANNindependentInput"	#autoencoder generated artificial neural network
+algorithmAEANN = "AEANNsequentialInput"	#autoencoder generated artificial neural network
 if(algorithmAEANN == "AEANNindependentInput"):
 	import AEANNtf_algorithmIndependentInput as AEANNtf_algorithm
 elif(algorithmAEANN == "AEANNsequentialInput"):
@@ -51,7 +51,13 @@ elif(algorithmAEANN == "AEANNsequentialInput"):
 
 suppressGradientDoNotExistForVariablesWarnings = True
 
-if(algorithmAEANN == "AEANNsequentialInput"):
+if(algorithmAEANN == "AEANNindependentInput"):
+	useSmallSentenceLengths = False
+	
+	trainMultipleFiles = False
+	trainMultipleNetworks = False
+	numberOfNetworks = 1
+elif(algorithmAEANN == "AEANNsequentialInput"):
 	#performance enhancements for development environment only: 
 	trainMultipleFiles = False	#can set to true for production (after testing algorithm)
 	if(trainMultipleFiles):
@@ -73,7 +79,7 @@ if(algorithmAEANN == "AEANNsequentialInput"):
 	AEANNsequentialInputTypeMinWordVectors = True	#only train network using word vector level input (no lower abstractions)	#lookup input vectors for current level input type (e.g. if words, using a large word2vec database), else generate input vectors using lowever level AEANN network #not supported by AEANNsequentialInputType=characters
 	AEANNsequentialInputTypeMaxWordVectors = False	#only train network using word vector level input (no higher abstractions)	#will flatten any higher level abstractions defined in AEANNsequentialInputTypeMax down to word vector lists (sentences)
 	
-	useSmallSentenceLengths = False
+	useSmallSentenceLengths = True
 	if(useSmallSentenceLengths): 
 		AEANNsequentialInputTypesMaxLength = [10, 10, 10, 10]	#temporarily reduce input size for debug/processing speed
 	else:
@@ -107,13 +113,6 @@ if(algorithmAEANN == "AEANNsequentialInput"):
 		#numberOfNetworks = AEANNsequentialInputType+1
 	numberOfNetworks = AEANNsequentialInputNumberOfTypes	#full, even though not all networks may be used
 
-else:
-	useSmallSentenceLengths = False
-	
-	trainMultipleFiles = False
-	trainMultipleNetworks = False
-	numberOfNetworks = 1
-	
 
 if(trainMultipleFiles):
 	randomiseFileIndexParse = True
@@ -214,7 +213,8 @@ def trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, op
 def executeOptimisation(x, y, datasetNumClasses, numberOfLayers, optimizer, networkIndex=1, autoencoder=False, s=None, l1=None):
 	with tf.GradientTape() as gt:
 		loss, acc = calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex, autoencoder, s, l1)
-		
+
+	#must syncronise with defineNeuralNetworkParameters;
 	if(algorithmAEANN == "AEANNindependentInput"):
 		#train specific layer weights;
 		Wlist = []
@@ -238,64 +238,78 @@ def executeOptimisation(x, y, datasetNumClasses, numberOfLayers, optimizer, netw
 			Wlblist = []
 		Blist = []
 		
-		if(AEANNtf_algorithm.supportSkipLayers):
+		if(AEANNtf_algorithm.supportFullLayerConnectivity):
 			if(AEANNtf_algorithm.verticalConnectivity):
 				for l2 in range(1, l1):
-					if(AEANNtf_algorithm.verticalPropagationInfluentialSequenceIndependentWeights):
-						verticalPropagationInfluentialSequenceSizeMax = AEANNtf_algorithm.getNumberSequentialInputs(AEANNtf_algorithm.n_h) #numberOfLayers-(l1+1)
-						for s2 in range(verticalPropagationInfluentialSequenceSizeMax):
-							Wflist.append(AEANNtf_algorithm.Wf[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wf")])
-							if(autoencoder and AEANNtf_algorithmSequentialInput.verticalAutoencoder):
-								Wblist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wb")])
-					else:
-						Wflist.append(AEANNtf_algorithm.Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")])
-						if(autoencoder and AEANNtf_algorithmSequentialInput.verticalAutoencoder):
-							Wblist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")])
+					if(l2 < l1):	#first layer does not have vertical connections (just pass through of sequential input x):
+						if(AEANNtf_algorithm.verticalPropagationInfluentialSequenceIndependentWeights):
+							if(AEANNtf_algorithm.supportSequentialConnectivityIndependentWeightsAbsolute):
+								verticalPropagationInfluentialSequenceSizeMax = AEANNtf_algorithm.getNumberSequentialInputs(AEANNtf_algorithm.n_h) #numberOfLayers-(l1+1)
+							elif(AEANNtf_algorithm.supportSequentialConnectivityIndependentWeightsRelative):
+								verticalPropagationInfluentialSequenceSizeMax = 2
+							for s2 in range(verticalPropagationInfluentialSequenceSizeMax):
+								Wflist.append(AEANNtf_algorithm.Wf[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wf")])
+								if(autoencoder and AEANNtf_algorithm.verticalAutoencoder):
+									Wblist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wb")])
+						else:
+							Wflist.append(AEANNtf_algorithm.Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")])
+							if(autoencoder and AEANNtf_algorithm.verticalAutoencoder):
+								Wblist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")])
 			if(AEANNtf_algorithm.lateralConnectivity):
 				for l2 in range(l1, numberOfLayers+1):
 					if(AEANNtf_algorithm.lateralPropagationInfluentialSequenceIndependentWeights):
-						lateralPropagationInfluentialSequenceSizeMax = AEANNtf_algorithm.getNumberSequentialInputs(AEANNtf_algorithm.n_h) #numberOfLayers-(l1+1)
+						if(AEANNtf_algorithm.supportSequentialConnectivityIndependentWeightsAbsolute):
+							lateralPropagationInfluentialSequenceSizeMax = AEANNtf_algorithm.getNumberSequentialInputs(AEANNtf_algorithm.n_h) #numberOfLayers-(l1+1)
+						elif(AEANNtf_algorithm.supportSequentialConnectivityIndependentWeightsRelative):
+							print("error: lateralPropagationInfluentialSequenceIndependentWeights and !supportSequentialConnectivityIndependentWeightsAbsolute")		
 						for s2 in range(lateralPropagationInfluentialSequenceSizeMax):
 							Wlflist.append(AEANNtf_algorithm.Wlf[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wlf")])
-							if(autoencoder and AEANNtf_algorithmSequentialInput.lateralAutoencoder):
+							if(autoencoder and AEANNtf_algorithm.lateralAutoencoder):
 								Wlblist.append(AEANNtf_algorithm.Wlb[generateParameterNameNetworkSeqSkipLayers(networkIndex, l2, l1, s2, "Wlb")])
 					else:
 						Wlflist.append(AEANNtf_algorithm.Wlf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wlf")])
-						if(autoencoder and AEANNtf_algorithmSequentialInput.lateralAutoencoder):
+						if(autoencoder and AEANNtf_algorithm.lateralAutoencoder):
 							Wlblist.append(AEANNtf_algorithm.Wlb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wlb")])
 		else:
 			if(AEANNtf_algorithm.verticalConnectivity):
-				if(AEANNtf_algorithm.verticalPropagationInfluentialSequenceIndependentWeights):
-					verticalPropagationInfluentialSequenceSizeMax = AEANNtf_algorithm.getNumberSequentialInputs(AEANNtf_algorithm.n_h) #numberOfLayers-(l1+1)
-					for s2 in range(verticalPropagationInfluentialSequenceSizeMax):
-						Wflist.append(AEANNtf_algorithm.Wf[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wf")])
-						if(autoencoder and AEANNtf_algorithmSequentialInput.verticalAutoencoder):
-							Wblist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wb")])
-				else:
-					Wflist.append(AEANNtf_algorithm.Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")])
-					if(autoencoder and AEANNtf_algorithmSequentialInput.verticalAutoencoder):
-						Wblist.append(AEANNtf_algorithm.Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")])
+				if(l1 > 1):	#first layer does not have vertical connections (just pass through of sequential input x):
+					if(AEANNtf_algorithm.verticalPropagationInfluentialSequenceIndependentWeights):
+						if(AEANNtf_algorithm.supportSequentialConnectivityIndependentWeightsAbsolute):
+							verticalPropagationInfluentialSequenceSizeMax = AEANNtf_algorithm.getNumberSequentialInputs(AEANNtf_algorithm.n_h) #numberOfLayers-(l1+1)
+						elif(AEANNtf_algorithm.supportSequentialConnectivityIndependentWeightsRelative):
+							verticalPropagationInfluentialSequenceSizeMax = 2
+						for s2 in range(verticalPropagationInfluentialSequenceSizeMax):
+							Wflist.append(AEANNtf_algorithm.Wf[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wf")])
+							if(autoencoder and AEANNtf_algorithm.verticalAutoencoder):
+								Wblist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wb")])
+					else:
+						Wflist.append(AEANNtf_algorithm.Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")])
+						if(autoencoder and AEANNtf_algorithm.verticalAutoencoder):
+							Wblist.append(AEANNtf_algorithm.Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")])
 			if(AEANNtf_algorithm.lateralConnectivity):
 				if(AEANNtf_algorithm.lateralPropagationInfluentialSequenceIndependentWeights):
-					lateralPropagationInfluentialSequenceSizeMax = AEANNtf_algorithm.getNumberSequentialInputs(AEANNtf_algorithm.n_h) #numberOfLayers-(l1+1)
+					if(AEANNtf_algorithm.supportSequentialConnectivityIndependentWeightsAbsolute):
+						lateralPropagationInfluentialSequenceSizeMax = AEANNtf_algorithm.getNumberSequentialInputs(AEANNtf_algorithm.n_h) #numberOfLayers-(l1+1)
+					elif(AEANNtf_algorithm.supportSequentialConnectivityIndependentWeightsRelative):
+						print("error: lateralPropagationInfluentialSequenceIndependentWeights and !supportSequentialConnectivityIndependentWeightsAbsolute")
 					for s2 in range(lateralPropagationInfluentialSequenceSizeMax):
 						Wlflist.append(AEANNtf_algorithm.Wlf[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wlf")])
-						if(autoencoder and AEANNtf_algorithmSequentialInput.lateralAutoencoder):
+						if(autoencoder and AEANNtf_algorithm.lateralAutoencoder):
 							Wlblist.append(AEANNtf_algorithm.Wlb[generateParameterNameNetworkSeq(networkIndex, l1, s2, "Wlb")])
 				else:
 					Wlflist.append(AEANNtf_algorithm.Wlf[generateParameterNameNetwork(networkIndex, l1, "Wlf")])
-					if(autoencoder and AEANNtf_algorithmSequentialInput.lateralAutoencoder):
+					if(autoencoder and AEANNtf_algorithm.lateralAutoencoder):
 						Wlblist.append(AEANNtf_algorithm.Wlb[generateParameterNameNetwork(networkIndex, l1, "Wlb")])
 		Blist.append(AEANNtf_algorithm.B[generateParameterNameNetwork(networkIndex, l1, "B")])	
 		
 		trainableVariables = []
 		if(AEANNtf_algorithm.verticalConnectivity):
 			trainableVariables.extend(Wflist)
-			if(autoencoder and AEANNtf_algorithmSequentialInput.verticalAutoencoder):
+			if(autoencoder and AEANNtf_algorithm.verticalAutoencoder):
 				trainableVariables.extend(Wblist)
 		if(AEANNtf_algorithm.lateralConnectivity):
 			trainableVariables.extend(Wlflist)
-			if(autoencoder and AEANNtf_algorithmSequentialInput.lateralAutoencoder):
+			if(autoencoder and AEANNtf_algorithm.lateralAutoencoder):
 				trainableVariables.extend(Wlblist)						
 		trainableVariables.extend(Blist)
 		#trainableVariables = Wflist + Wblist + Wlflist + Wlblist + Blist
@@ -334,14 +348,21 @@ def calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossE
 			#print("1 loss = ", loss)
 	elif(algorithmAEANN == "AEANNsequentialInput"):
 		if(autoencoder):
-			print("AEANNtf_algorithm.getAtraceTarget")
-			target = AEANNtf_algorithm.getAtraceTarget(networkIndex)
-			print("AEANNtf_algorithm.neuralNetworkPropagationAEANN")
-			pred = AEANNtf_algorithm.neuralNetworkPropagationAEANN(x, autoencoder=True, semisupervisedEncoder=False, layerFirst=l, layerLast=l, sequentialInputFirst=s, sequentialInputLast=s, networkIndex=networkIndex)
-			loss = calculateLossMeanSquaredError(pred, target)
-			#print("target = ", target)
-			#print("pred = ", pred)
-			print("loss = ", loss)
+			if(AEANNtf_algorithm.calculateLossAcrossAllActivations):
+				#print("AEANNtf_algorithm.getAtraceTarget")
+				target = AEANNtf_algorithm.getAtraceTarget(networkIndex)
+				#print("AEANNtf_algorithm.neuralNetworkPropagationAEANN 1")
+				optimisationRequired, pred, _ = AEANNtf_algorithm.neuralNetworkPropagationAEANN(x, autoencoder=True, semisupervisedEncoder=False, layerFirst=l, layerLast=l, sequentialInputFirst=s, sequentialInputLast=s, networkIndex=networkIndex)
+			else:
+				#print("AEANNtf_algorithm.neuralNetworkPropagationAEANN 2")
+				optimisationRequired, pred, target = AEANNtf_algorithm.neuralNetworkPropagationAEANN(x, autoencoder=True, semisupervisedEncoder=False, layerFirst=l, layerLast=l, sequentialInputFirst=s, sequentialInputLast=s, networkIndex=networkIndex)
+			if(optimisationRequired):
+				loss = calculateLossMeanSquaredError(pred, target)
+				#print("target = ", target)
+				#print("pred = ", pred)
+				print("loss = ", loss)
+			else:
+				loss = tf.Variable(0.0)
 		else:
 			print("calculatePropagationLoss AEANNsequentialInput error: only autoencoder learning currently coded")
 			pass
@@ -655,17 +676,19 @@ def trainSequentialInputNetwork(batchIndex, AEANNsequentialInputTypeIndex, batch
 	else:
 		#print("layerInputVectorListGenerated = ", layerInputVectorListGenerated)
 		batchInputVector = tf.stack(layerInputVectorListGenerated)	#shape: numberSequentialInputs x batchSize x inputVecDimensions
+		print("batchInputVector.shape = ", batchInputVector.shape)
 		batchInputVector = tf.transpose(batchInputVector, (1, 0, 2))	#shape: batchSize x numberSequentialInputs x inputVecDimensions
 		#use existing inputVectors generated from lower layer
-		print("layerInputVectorListGenerated: batchInputVector = ", batchInputVector)
+		#print("layerInputVectorListGenerated: batchInputVector = ", batchInputVector)
 		print("layerInputVectorListGenerated: batchInputVector.shape = ", batchInputVector.shape)
-		exit()
 	
 	#initialisation;
 	AEANNtf_algorithm.setNetworkIndex(networkIndex)
 	numberOfSequentialInputs = AEANNtf_algorithm.getNumberSequentialInputs(AEANNtf_algorithm.n_h)
-	AEANNtf_algorithm.initialiseAtrace(networkIndex)	#required for autencoder loss calculations
-	AEANNtf_algorithm.neuralNetworkPropagationAEANNsetInput(batchInputVector, networkIndex)
+	if(AEANNtf_algorithm.calculateLossAcrossAllActivations):
+		AEANNtf_algorithm.initialiseAtrace(networkIndex)	#required for autencoder loss calculations
+	if(AEANNtf_algorithm.setInputIndependently):
+		AEANNtf_algorithm.neuralNetworkPropagationAEANNsetInput(batchInputVector, networkIndex)
 
 	numberOfLayers = AEANNtf_algorithm.getNumberLayers(AEANNtf_algorithm.n_h)
 	#print("numberOfLayers = ", numberOfLayers)
@@ -684,7 +707,10 @@ def trainSequentialInputNetwork(batchIndex, AEANNsequentialInputTypeIndex, batch
 			if(AEANNtf_algorithm.verticalConnectivity):
 				if(AEANNtf_algorithm.verticalAutoencoder):
 					#only autoencoder learning is used during training:
-					batchX = None	#already set by AEANNtf_algorithm.neuralNetworkPropagationAEANNsetInput(batchInputVector)
+					if(not AEANNtf_algorithm.setInputIndependently):
+						batchX = x
+					else:
+						batchX = None	#already set by AEANNtf_algorithm.neuralNetworkPropagationAEANNsetInput(batchInputVector)
 					batchY = None	#not used by autoencoder learning
 					autoencoder = True
 					pred = trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display, autoencoder, s, l)
@@ -707,7 +733,7 @@ def trainSequentialInputNetwork(batchIndex, AEANNsequentialInputTypeIndex, batch
 	#else:
 	#	print("Test Accuracy: %f" % (calculateAccuracy(pred, test_y)))
 
-	higherLayerInputVector = AEANNtf_algorithm.neuralNetworkPropagationTestGenerateHigherLayerInputVector(networkIndex, batchX)	#batchSize x inputVecDimensions		#propagate through network and return activation levels of all neurons	
+	higherLayerInputVector = AEANNtf_algorithm.neuralNetworkPropagationTestGenerateHigherLayerInputVector(networkIndex, batchInputVector)	#batchSize x inputVecDimensions		#propagate through network and return activation levels of all neurons	
 	return higherLayerInputVector
 
 def generateRandomisedIndexArray(indexFirst, indexLast, arraySize=None):
