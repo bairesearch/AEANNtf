@@ -70,6 +70,7 @@ elif(algorithmAEANN == "AEANNsequentialInput"):
 	AEANNsequentialInputTypeWords = 1
 	AEANNsequentialInputTypeSentences = 2
 	AEANNsequentialInputTypeParagraphs = 3	
+	AEANNsequentialInputTypeArticles = 4
 	AEANNsequentialInputTypes = ["characters", "words", "sentences", "paragraphs"]
 	AEANNsequentialInputNumberOfTypes = len(AEANNsequentialInputTypes)
 
@@ -77,8 +78,9 @@ elif(algorithmAEANN == "AEANNsequentialInput"):
 	AEANNsequentialInputTypeName = AEANNsequentialInputTypes[AEANNsequentialInputType] #eg "words"
 	AEANNsequentialInputTypeMax = AEANNsequentialInputTypeParagraphs	#0:characters, 1:words, 2:sentences, 3:paragraphs
 	AEANNsequentialInputTypeMinWordVectors = True	#only train network using word vector level input (no lower abstractions)	#lookup input vectors for current level input type (e.g. if words, using a large word2vec database), else generate input vectors using lowever level AEANN network #not supported by AEANNsequentialInputType=characters
-	AEANNsequentialInputTypeMaxWordVectors = False	#only train network using word vector level input (no higher abstractions)	#will flatten any higher level abstractions defined in AEANNsequentialInputTypeMax down to word vector lists (sentences)
-	
+	AEANNsequentialInputTypeMaxWordVectors = True	#enable during testing	#only train network using word vector level input (no higher abstractions)	#will flatten any higher level abstractions defined in AEANNsequentialInputTypeMax down to word vector lists (sentences)
+	AEANNsequentialInputTypeTrainWordVectors = (not AEANNsequentialInputTypeMinWordVectors)
+
 	useSmallSentenceLengths = True
 	if(useSmallSentenceLengths): 
 		AEANNsequentialInputTypesMaxLength = [10, 10, 10, 10]	#temporarily reduce input size for debug/processing speed
@@ -401,7 +403,7 @@ def loadDataset(fileIndex):
 		numberOfFeaturesPerWord = None
 		paddingTagIndex = None
 	elif(dataset == "wikiXmlDataset"):
-		articles = ANNtf2_loadDataset.loadDatasetType4(datasetType4FileName, AEANNsequentialInputTypesMaxLength, useSmallSentenceLengths, AEANNsequentialInputTypeMinWordVectors)
+		articles = ANNtf2_loadDataset.loadDatasetType4(datasetType4FileName, AEANNsequentialInputTypesMaxLength, useSmallSentenceLengths, AEANNsequentialInputTypeTrainWordVectors)
 
 	if(dataset == "wikiXmlDataset"):
 		return articles
@@ -577,6 +579,11 @@ def trainSequentialInput(trainMultipleFiles=False, greedy=False):
 			#AEANN specific code;
 							
 			articles = loadDataset(fileIndex)
+			
+			if(AEANNsequentialInputTypeMaxWordVectors):
+				#flatten any higher level abstractions defined in AEANNsequentialInputTypeMax down to word vector lists (sentences);
+				articles = flattenNestedListToSentences(articles)
+					
 			#numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y
 			
 			#print("articles = ", articles)
@@ -591,38 +598,46 @@ def trainSequentialInput(trainMultipleFiles=False, greedy=False):
 				sampleIndexShuffledArray = generateRandomisedIndexArray(sampleIndexFirst, sampleIndexLast, arraySize=batchSize)
 				paragraphs = [articles[i] for i in sampleIndexShuffledArray]
 				batchesList.append(paragraphs)
-			
+	
+			print("listDimensions(batchesList) = ", listDimensions(batchesList))
+		
 			for batchIndex, batch in enumerate(batchesList):
-
 				#print("listDimensions(batch) = ", listDimensions(batch))
-						
-				#flatten any higher level abstractions defined in AEANNsequentialInputTypeMax down to word vector lists (sentences);
+				#print("batch = ", batch)
+				
 				AEANNsequentialInputTypeMaxTemp = None
-				batchNestedList = []
-				if(AEANNsequentialInputTypeMaxWordVectors):
-					for paragraphs in batch:
-						nestedList = paragraphs
-						for AEANNsequentialInputTypeIndex in range(AEANNsequentialInputTypeMax, AEANNsequentialInputTypeWords-1, -1):
-							flattenedList = []
-							for content in range(nestedList):
-								flattenedList.extend(content)
-							nestedList = flattenedList	#for recursion
-						AEANNsequentialInputTypeMaxTemp = AEANNsequentialInputTypeWords
-						batchNestedList.append(nestedList)
-					#print("batchNestedList = ", batchNestedList)
-				else:
-					batchNestedList = batch
-					#print("listDimensions(batchNestedList) = ", listDimensions(batchNestedList))
-					AEANNsequentialInputTypeMaxTemp = AEANNsequentialInputTypeMax
-								
-				trainSequentialInputNetworkRecurse(batchIndex, AEANNsequentialInputTypeMaxTemp, batchNestedList, optimizer)	#train all AEANN networks (at each layer of abstraction)
-			
+				batchNestedList = batch
+				#print("listDimensions(batchNestedList) = ", listDimensions(batchNestedList))
+				AEANNsequentialInputTypeMaxTemp = AEANNsequentialInputTypeMax
+							
+				if(AEANNsequentialInputTypeMaxWordVectors and AEANNsequentialInputTypeMinWordVectors):
+					trainSequentialInputNetwork(batchIndex, AEANNsequentialInputTypeWords, batchNestedList, None, optimizer)
+				else:	
+					layerInputVectorListGenerated = trainSequentialInputNetworkRecurse(batchIndex, AEANNsequentialInputTypeMaxTemp, batchNestedList, optimizer)	#train all AEANN networks (at each layer of abstraction)
+					#trainSequentialInputNetwork(batchIndex, AEANNsequentialInputTypeWords, batchNestedList, layerInputVectorListGenerated, optimizer)	#CHECKTHIS is not required
+
+def flattenNestedListToSentences(articles):
+	articlesFlattened = []
+	nestedList = articles
+	for AEANNsequentialInputTypeIndex in range(AEANNsequentialInputTypeArticles, AEANNsequentialInputTypeSentences, -1):
+		#print("AEANNsequentialInputTypeIndex = ", AEANNsequentialInputTypeIndex)
+		flattenedList = []
+		for content in nestedList:
+			flattenedList.extend(content)
+		#print("flattenedList = ", flattenedList)
+		nestedList = flattenedList	#for recursion
+	AEANNsequentialInputTypeMaxTemp = AEANNsequentialInputTypeWords
+	articlesFlattened = nestedList
+	#print("articles = ", articles)
+	#print("listDimensions(articlesFlattened) = ", listDimensions(articlesFlattened))
+	return articlesFlattened
+							
 def trainSequentialInputNetworkRecurse(batchIndex, AEANNsequentialInputTypeIndex, batchNestedList, optimizer):
 
 	higherLayerInputVectorList = []
 	maxNumberNestedListElements = AEANNsequentialInputTypesMaxLength[AEANNsequentialInputTypeIndex]
 	for nestedListElementIndex in range(maxNumberNestedListElements):
-		#print("nestedListElementIndex = ", nestedListElementIndex)
+		print("nestedListElementIndex = ", nestedListElementIndex)
 		batchNestedListElement = []	#batched
 		for nestedList in batchNestedList:
 			if(nestedListElementIndex < len(nestedList)):

@@ -786,6 +786,7 @@ def loadDatasetType4(datasetFileNameX, AEANNsequentialInputTypesMaxLength, useSm
 						sentence = words
 						sentences.append(sentence)
 					else:
+						#print("wordsText = ", wordsText)
 						sentences.append(wordsText)
 			paragraphs.append(sentences)
 		articles.append(paragraphs)
