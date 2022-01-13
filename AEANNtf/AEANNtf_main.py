@@ -42,8 +42,8 @@ import ANNtf2_loadDataset
 
 
 costCrossEntropyWithLogits = False
-#algorithmAEANN = "AEANNindependentInput"	#autoencoder generated artificial neural network
-algorithmAEANN = "AEANNsequentialInput"	#autoencoder generated artificial neural network
+algorithmAEANN = "AEANNindependentInput"	#autoencoder generated artificial neural network
+#algorithmAEANN = "AEANNsequentialInput"	#autoencoder generated artificial neural network
 if(algorithmAEANN == "AEANNindependentInput"):
 	import AEANNtf_algorithmIndependentInput as AEANNtf_algorithm
 elif(algorithmAEANN == "AEANNsequentialInput"):
@@ -221,13 +221,17 @@ def executeOptimisation(x, y, datasetNumClasses, numberOfLayers, optimizer, netw
 		#train specific layer weights;
 		Wlist = []
 		Blist = []
-		if(l1 == numberOfLayers):
-			Wlist.append(AEANNtf_algorithm.Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")])
-			Blist.append(AEANNtf_algorithm.B[generateParameterNameNetwork(networkIndex, l1, "B")])		
+		if(AEANNtf_algorithm.supportSkipLayers):
+			for l2 in range(0, l1):
+				if(l2 < l1):
+					Wlist.append(AEANNtf_algorithm.Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")])
+					if(l1 != numberOfLayers):
+						Wlist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")])
 		else:
 			Wlist.append(AEANNtf_algorithm.Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")])
-			Wlist.append(AEANNtf_algorithm.Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")])
-			Blist.append(AEANNtf_algorithm.B[generateParameterNameNetwork(networkIndex, l1, "B")])
+			if(l1 != numberOfLayers):
+				Wlist.append(AEANNtf_algorithm.Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")])
+		Blist.append(AEANNtf_algorithm.B[generateParameterNameNetwork(networkIndex, l1, "B")])
 		trainableVariables = Wlist + Blist
 		WlistLength = len(Wlist)
 		BlistLength = len(Blist)
@@ -342,8 +346,7 @@ def calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossE
 			#print("pred = ", pred)
 			#print("2 loss = ", loss)
 		else:
-			pred = AEANNtf_algorithm.neuralNetworkPropagationAEANNautoencoderLayer(x, l, networkIndex)
-			target = AEANNtf_algorithm.neuralNetworkPropagationAEANNtestLayer(x, l-1, autoencoder=False, networkIndex=networkIndex)
+			pred, target = AEANNtf_algorithm.neuralNetworkPropagationAEANNautoencoderLayer(x, l, networkIndex)
 			loss = calculateLossMeanSquaredError(pred, target)
 			#print("target = ", target)
 			#print("pred = ", pred)
@@ -489,6 +492,7 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 				trainDataListIterators = []
 				for trainData in trainDataList:
 					trainDataListIterators.append(iter(trainData))
+				testBatchX, testBatchY = generateTFbatch(test_x, test_y, batchSize)
 
 				for batchIndex in range(int(trainingSteps)):
 					(batchX, batchY) = trainDataListIterators[trainDataIndex].get_next()	#next(trainDataListIterators[trainDataIndex])
@@ -516,21 +520,21 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 
 				#trainMultipleNetworks code;
 				if(trainMultipleNetworks):
-					predNetworkAverageAll = tf.Variable(tf.zeros([test_y.shape[0], datasetNumClasses]))
+					predNetworkAverageAll = tf.Variable(tf.zeros([testBatchY.shape[0], datasetNumClasses]))
 					for networkIndex in range(1, numberOfNetworks+1):
-						pred = neuralNetworkPropagationTest(test_x, networkIndex)	#test_x batch may be too large to propagate simultaneously and require subdivision
-						print("Test Accuracy: networkIndex: %i, %f" % (networkIndex, calculateAccuracy(pred, test_y)))
+						pred = neuralNetworkPropagationTest(testBatchX, networkIndex)
+						print("Test Accuracy: networkIndex: %i, %f" % (networkIndex, calculateAccuracy(pred, testBatchY)))
 						predNetworkAverageAll = predNetworkAverageAll + pred
 					predNetworkAverageAll = predNetworkAverageAll / numberOfNetworks
 					#print("predNetworkAverageAll", predNetworkAverageAll)
-					acc = calculateAccuracy(predNetworkAverageAll, test_y)
+					acc = calculateAccuracy(predNetworkAverageAll, testBatchY)
 					print("Test Accuracy: %f" % (acc))
 				else:
-					pred = neuralNetworkPropagationTest(test_x, networkIndex)
+					pred = neuralNetworkPropagationTest(testBatchX, networkIndex)
 					if(greedy):
-						print("Test Accuracy: l: %i, %f" % (l, calculateAccuracy(pred, test_y)))
+						print("Test Accuracy: l: %i, %f" % (l, calculateAccuracy(pred, testBatchY)))
 					else:
-						print("Test Accuracy: %f" % (calculateAccuracy(pred, test_y)))
+						print("Test Accuracy: %f" % (calculateAccuracy(pred, testBatchY)))
 
 def listDimensions(a):
 	if not type(a) == list:
