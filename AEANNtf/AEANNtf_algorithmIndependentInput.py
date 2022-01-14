@@ -23,13 +23,20 @@ Greedy layer construction using autoencoders
 
 import tensorflow as tf
 import numpy as np
+import copy
 from ANNtf2_operations import *	#generateParameterNameSeq, generateParameterName, defineNetworkParameters
 import ANNtf2_operations
 import ANNtf2_globalDefs
-import copy
+import ANNtf2_algorithmLIANN_math	#required for supportDimensionalityReduction:useCorrelationMatrix
+np.set_printoptions(suppress=True)
 
 supportSkipLayers = True #fully connected skip layer network	#TODO: add support for skip layers	#see ANNtf2_algorithmFBANN for template
-
+supportDimensionalityReduction = True	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN) - this dimensionality reduction method is designed to be used in combination with a large autoencoder hidden layer (> input/output layer), as opposed to a small (bottlenecked) autoencoder hidden layer
+if(supportDimensionalityReduction):
+	supportDimensionalityReductionRandomise	= True	#randomise weights of highly correlated neurons, else zero them (effectively eliminating neuron from network, as its weights are no longer able to be trained)
+	useCorrelationMatrix = True
+	maxCorrelation = 0.95	#requires tuning
+	
 debugFastTrain = False	#not supported
 debugSmallBatchSize = False	#not supported #small batch size for debugging matrix output
 
@@ -108,6 +115,7 @@ def defineNeuralNetworkParameters():
 
 	print("numberOfNetworks", numberOfNetworks)
 	
+	global randomNormal
 	randomNormal = tf.initializers.RandomNormal()
 	
 	for networkIndex in range(1, numberOfNetworks+1):
@@ -151,6 +159,114 @@ def neuralNetworkPropagationAEANNfinalLayer(x, networkIndex=1):
 #   return neuralNetworkPropagationAEANN(x, autoencoder=False, layer=l, networkIndex=networkIndex)
 
 
+	
+def neuralNetworkPropagationAEANNdimensionalityReduction(x, networkIndex=1):
+
+	AprevLayer = x
+	if(supportSkipLayers):
+		Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")] = AprevLayer
+		
+	for l1 in range(1, numberOfLayers):	#ignore first/last layer
+		
+		#forward propagation single layer (could extract to separate function);
+		if(supportSkipLayers):
+			Z = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")].shape)
+			for l2 in range(0, l1):
+				WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
+				#print("l1 l2 = ", l1, " ", l2)
+				#print("WlayerF.shape = ", WlayerF.shape)
+				#print("Z.shape = ", Z.shape)
+				#at = Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")]
+				#print("at.shape = ", at.shape)
+				Z = tf.add(Z, tf.add(tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")]))	
+		else:	
+			WlayerF = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")]
+			Z = tf.add(tf.matmul(AprevLayer, WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")])
+		A = activationFunction(Z)
+
+		Atransposed = tf.transpose(A)
+		if(useCorrelationMatrix):
+			correlationMatrix = ANNtf2_algorithmLIANN_math.calculateOffDiagonalCorrelationMatrix(A, nanReplacementValue=0.0, getOffDiagonalCorrelationMatrix=True)	#off diagonal correlation matrix is required so that do not duplicate k1->k2 and k2->k1 correlations	#CHECKTHIS: nanReplacementValue
+			#print("correlationMatrix = ", correlationMatrix)
+			#print("correlationMatrix.shape = ", correlationMatrix.shape)
+		
+		if(useCorrelationMatrix):
+			k1maxCorrelation = correlationMatrix.max(axis=0)
+			k2maxCorrelation = correlationMatrix.max(axis=1)
+			k1maxCorrelation = np.maximum(k1maxCorrelation, k2maxCorrelation)
+			#k1maxCorrelationIndex = correlationMatrix.argmax(axis=0)	#or axis=1
+			
+			k1maxCorrelation = tf.convert_to_tensor(k1maxCorrelation)
+		else:
+			#incomplete;
+			for k1 in range(n_h[l1]):
+				#calculate maximum correlation;
+				k1maxCorrelation = 0.0
+				for k2 in range(n_h[l1]):
+					if(k1 != k2):
+						Ak1 = Atransposed[k1]	#Ak: 1d vector of batchsize
+						Ak2 = Atransposed[k2]	#Ak: 1d vector of batchsize
+						k1k2correlation = calculateCorrelation(Ak1, Ak2)	#undefined
+			
+		#generate masks (based on highly correlated k/neurons);
+		#print("k1maxCorrelation = ", k1maxCorrelation)
+		k1PassArray = tf.less(k1maxCorrelation, maxCorrelation)
+		k1FailArray = tf.logical_not(k1PassArray)
+		#print("k1PassArray = ", k1PassArray)
+		#print("k1FailArray = ", k1FailArray)
+		k1PassArrayF = tf.expand_dims(k1PassArray, axis=0)
+		k1FailArrayF = tf.expand_dims(k1FailArray, axis=0)
+		k1PassArrayB = tf.expand_dims(k1PassArray, axis=1)
+		k1FailArrayB = tf.expand_dims(k1FailArray, axis=1)
+		k1PassArrayF = tf.cast(k1PassArrayF, tf.float32)
+		k1FailArrayF = tf.cast(k1FailArrayF, tf.float32)
+		k1PassArrayB = tf.cast(k1PassArrayB, tf.float32)
+		k1FailArrayB = tf.cast(k1FailArrayB, tf.float32)
+					
+		#apply masks to weights (randomise specific k/neurons);					
+		if(supportSkipLayers):
+			for l2 in range(0, l1):
+				if(l2 < l1):
+					#randomize or zero
+					if(supportDimensionalityReductionRandomise):
+						WlayerFrand = randomNormal([n_h[l2], n_h[l1]]) 
+						WlayerBrand = randomNormal([n_h[l1], n_h[l2]]) 
+					else:
+						WlayerFrand = tf.zeros([n_h[l2], n_h[l1]], dtype=tf.dtypes.float32)
+						WlayerBrand = tf.zeros([n_h[l1], n_h[l2]], dtype=tf.dtypes.float32)				
+					WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
+					WlayerB = Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")]
+					WlayerFrand = tf.multiply(WlayerFrand, k1FailArrayF)
+					WlayerBrand = tf.multiply(WlayerBrand, k1FailArrayB)
+					WlayerF = tf.multiply(WlayerF, k1PassArrayF)
+					WlayerB = tf.multiply(WlayerB, k1PassArrayB)
+					WlayerF = tf.add(WlayerF, WlayerFrand)
+					WlayerB = tf.add(WlayerB, WlayerBrand)
+					Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")] = WlayerF
+					Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")] = WlayerB
+		else:
+			if(supportDimensionalityReductionRandomise):
+				WlayerFrand = randomNormal([n_h[l1-1], n_h[l1]]) 
+				WlayerBrand = randomNormal([n_h[l1], n_h[l1-1]])
+			else:
+				WlayerFrand = tf.zeros([n_h[l1-1], n_h[l1]], dtype=tf.dtypes.float32)
+				WlayerBrand = tf.zeros([n_h[l1], n_h[l1-1]], dtype=tf.dtypes.float32)		
+			WlayerF = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")]
+			WlayerB = Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")]
+			WlayerFrand = tf.multiply(WlayerFrand, k1FailArrayF)
+			WlayerBrand = tf.multiply(WlayerBrand, k1FailArrayB)
+			WlayerF = tf.multiply(WlayerF, k1PassArrayF)
+			WlayerB = tf.multiply(WlayerB, k1PassArrayB)
+			WlayerF = tf.add(WlayerF, WlayerFrand)
+			WlayerB = tf.add(WlayerB, WlayerBrand)
+			Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")] = WlayerF
+			Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")] = WlayerB
+								
+		AprevLayer = A
+		if(supportSkipLayers):
+			Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = Z
+			Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = A
+			
 def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):
 
 	outputPred = None
@@ -178,7 +294,6 @@ def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):
 			Z = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")].shape)
 			for l2 in range(0, l1):
 				WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
-				at = Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")]
 				Z = tf.add(Z, tf.add(tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")]))	
 				if(autoencoder):
 					outputTargetListPartial = Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")]
@@ -222,7 +337,6 @@ def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):
 		A = tf.stop_gradient(A)	#only train weights for layer l1
 
 		AprevLayer = A
-
 		if(supportSkipLayers):
 			Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = Z
 			Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = A

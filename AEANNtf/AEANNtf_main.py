@@ -198,6 +198,9 @@ def trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, op
 	#for l in range(1, numberOfLayers+1):
 	loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, autoencoder, s, l)
 		#loss, acc before gradient descent
+	
+	if(AEANNtf_algorithm.supportDimensionalityReduction):
+		AEANNtf_algorithm.neuralNetworkPropagationAEANNdimensionalityReduction(batchX, networkIndex)	
 
 	pred = None
 	if(display):
