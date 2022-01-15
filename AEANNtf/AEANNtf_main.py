@@ -196,16 +196,32 @@ def trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, op
 	
 	#print("trainMultipleFiles error: does not support greedy training for AEANN")
 	#for l in range(1, numberOfLayers+1):
-	loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, autoencoder, s, l)
-		#loss, acc before gradient descent
+	if(algorithmAEANN == "AEANNindependentInput"):
+		if(AEANNtf_algorithm.learningAlgorithmAEANN):
+			loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, autoencoder, s, l)
+		elif(AEANNtf_algorithm.learningAlgorithmLIANN or AEANNtf_algorithm.learningAlgorithmNone):
+			if(l==numberOfLayers):
+				loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, autoencoder, s, l)
+		else:
+			print("trainBatch error: algorithmAEANN==AEANNindependentInput and AEANNtf_algorithm.learningAlgorithm unknown")
+			exit()
+	elif(algorithmAEANN == "AEANNsequentialInput"):
+		loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, autoencoder, s, l)
+	#loss, acc before gradient descent
 	
-	if(AEANNtf_algorithm.supportDimensionalityReduction):
+	if((algorithmAEANN == "AEANNindependentInput") and AEANNtf_algorithm.supportDimensionalityReduction):
 		AEANNtf_algorithm.neuralNetworkPropagationAEANNdimensionalityReduction(batchX, networkIndex)	
 
 	pred = None
 	if(display):
 		if(algorithmAEANN == "AEANNindependentInput"):
-			loss, acc = calculatePropagationLoss(batchX, batchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex, autoencoder, s, l)
+			if(AEANNtf_algorithm.learningAlgorithmAEANN):
+				loss, acc = calculatePropagationLoss(batchX, batchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex, autoencoder, s, l)	#display l autoencoder loss	
+			elif(AEANNtf_algorithm.learningAlgorithmLIANN or AEANNtf_algorithm.learningAlgorithmNone): 
+				loss, acc = calculatePropagationLoss(batchX, batchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex, autoencoder, s, l=numberOfLayers)	#display final layer loss
+			else:
+				print("trainBatch error: algorithmAEANN==AEANNindependentInput and AEANNtf_algorithm.learningAlgorithm unknown")
+				exit()
 		elif(algorithmAEANN == "AEANNsequentialInput"):
 			pass #not possible to reexecute calculatePropagationLoss, as it is executed iteratively across s and l	#use loss, acc before gradient optimisation
 		if(l is not None):

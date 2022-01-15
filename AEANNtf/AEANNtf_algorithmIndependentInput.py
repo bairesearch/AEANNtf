@@ -30,15 +30,30 @@ import ANNtf2_globalDefs
 import ANNtf2_algorithmLIANN_math	#required for supportDimensionalityReduction:useCorrelationMatrix
 np.set_printoptions(suppress=True)
 
-supportSkipLayers = True #fully connected skip layer network	#TODO: add support for skip layers	#see ANNtf2_algorithmFBANN for template
-supportDimensionalityReduction = True	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN) - this dimensionality reduction method is designed to be used in combination with a large autoencoder hidden layer (> input/output layer), as opposed to a small (bottlenecked) autoencoder hidden layer
+learningAlgorithmAEANN = False #AEANN backprop; default algorithm
+learningAlgorithmLIANN = True	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only
+learningAlgorithmNone = False	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
+#learningAlgorithmRUANNSUANN = False	#incomplete #perform stocastic update of weights (SUANN) based on RUANN (hypothetical AEANN hidden layer neuron activation/relaxation state modifications)
+
+debugSingleLayerOnly = False
+debugFastTrain = False	#not supported
+debugSmallBatchSize = False	#not supported #small batch size for debugging matrix output
+
+generateVeryLargeNetwork = False
+if(learningAlgorithmAEANN):
+	supportDimensionalityReduction = True	#optional	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN) - this dimensionality reduction method is designed to be used in combination with a large autoencoder hidden layer (> input/output layer), as opposed to a small (bottlenecked) autoencoder hidden layer
+elif(learningAlgorithmLIANN):
+	generateVeryLargeNetwork = True
+	supportDimensionalityReduction = True	#mandatory	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN)
+elif(learningAlgorithmNone):
+	generateVeryLargeNetwork = True
+	supportDimensionalityReduction = False
+		
+supportSkipLayers = True #fully connected skip layer network
 if(supportDimensionalityReduction):
 	supportDimensionalityReductionRandomise	= True	#randomise weights of highly correlated neurons, else zero them (effectively eliminating neuron from network, as its weights are no longer able to be trained)
 	useCorrelationMatrix = True
 	maxCorrelation = 0.95	#requires tuning
-	
-debugFastTrain = False	#not supported
-debugSmallBatchSize = False	#not supported #small batch size for debugging matrix output
 
 largeBatchSize = False	#not supported	#else train each layer using entire training set
 generateLargeNetwork = True	#required #CHECKTHIS: autoencoder does not require bottleneck
@@ -96,15 +111,21 @@ def defineNetworkParameters(num_input_neurons, num_output_neurons, datasetNumFea
 	global n_h
 	global numberOfLayers
 	global numberOfNetworks
-
-	if(generateLargeNetwork):
-		firstHiddenLayerNumberNeurons = num_input_neurons*3
+		
+	if(generateVeryLargeNetwork):
+		firstHiddenLayerNumberNeurons = num_input_neurons*10
 	else:
-		firstHiddenLayerNumberNeurons = num_input_neurons
-	if(generateDeepNetwork):
-		numberOfLayers = 3
+		if(generateLargeNetwork):
+			firstHiddenLayerNumberNeurons = num_input_neurons*3
+		else:
+			firstHiddenLayerNumberNeurons = num_input_neurons
+	if(debugSingleLayerOnly):
+		numberOfLayers = 1
 	else:
-		numberOfLayers = 2
+		if(generateDeepNetwork):
+			numberOfLayers = 3
+		else:
+			numberOfLayers = 2
 			
 	n_h, numberOfLayers, numberOfNetworks, datasetNumClasses = ANNtf2_operations.defineNetworkParametersDynamic(num_input_neurons, num_output_neurons, datasetNumFeatures, dataset, numberOfNetworksSet, numberOfLayers, firstHiddenLayerNumberNeurons, generateNetworkStatic)
 			
@@ -168,21 +189,7 @@ def neuralNetworkPropagationAEANNdimensionalityReduction(x, networkIndex=1):
 		
 	for l1 in range(1, numberOfLayers):	#ignore first/last layer
 		
-		#forward propagation single layer (could extract to separate function);
-		if(supportSkipLayers):
-			Z = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")].shape)
-			for l2 in range(0, l1):
-				WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
-				#print("l1 l2 = ", l1, " ", l2)
-				#print("WlayerF.shape = ", WlayerF.shape)
-				#print("Z.shape = ", Z.shape)
-				#at = Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")]
-				#print("at.shape = ", at.shape)
-				Z = tf.add(Z, tf.add(tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")]))	
-		else:	
-			WlayerF = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")]
-			Z = tf.add(tf.matmul(AprevLayer, WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")])
-		A = activationFunction(Z)
+		A, Z, outputTarget = neuralNetworkPropagationLayerForward(l1, AprevLayer, False, networkIndex)
 
 		Atransposed = tf.transpose(A)
 		if(useCorrelationMatrix):
@@ -229,8 +236,8 @@ def neuralNetworkPropagationAEANNdimensionalityReduction(x, networkIndex=1):
 				if(l2 < l1):
 					#randomize or zero
 					if(supportDimensionalityReductionRandomise):
-						WlayerFrand = randomNormal([n_h[l2], n_h[l1]]) 
-						WlayerBrand = randomNormal([n_h[l1], n_h[l2]]) 
+						WlayerFrand = randomNormal([n_h[l2], n_h[l1]])
+						WlayerBrand = randomNormal([n_h[l1], n_h[l2]])
 					else:
 						WlayerFrand = tf.zeros([n_h[l2], n_h[l1]], dtype=tf.dtypes.float32)
 						WlayerBrand = tf.zeros([n_h[l1], n_h[l2]], dtype=tf.dtypes.float32)				
@@ -238,8 +245,10 @@ def neuralNetworkPropagationAEANNdimensionalityReduction(x, networkIndex=1):
 					WlayerB = Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")]
 					WlayerFrand = tf.multiply(WlayerFrand, k1FailArrayF)
 					WlayerBrand = tf.multiply(WlayerBrand, k1FailArrayB)
+					#print("WlayerFrand + ", WlayerFrand)
 					WlayerF = tf.multiply(WlayerF, k1PassArrayF)
 					WlayerB = tf.multiply(WlayerB, k1PassArrayB)
+					#print("WlayerF + ", WlayerF)
 					WlayerF = tf.add(WlayerF, WlayerFrand)
 					WlayerB = tf.add(WlayerB, WlayerBrand)
 					Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")] = WlayerF
@@ -288,46 +297,14 @@ def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):
 		
 	for l1 in range(1, maxLayer+1):
 
-		if(supportSkipLayers):
-			if(autoencoder):
-				outputTargetList = []
-			Z = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")].shape)
-			for l2 in range(0, l1):
-				WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
-				Z = tf.add(Z, tf.add(tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")]))	
-				if(autoencoder):
-					outputTargetListPartial = Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")]
-					outputTargetList.append(outputTargetListPartial)
-			if(autoencoder):
-				outputTarget = tf.concat(outputTargetList, axis=1)
-				#print("outputTarget.shape = ", outputTarget.shape)
-		else:	
-			WlayerF = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")]
-			if(autoencoder):
-				outputTarget = AprevLayer
-			Z = tf.add(tf.matmul(AprevLayer, WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")])
-		A = activationFunction(Z)
+		A, Z, outputTarget = neuralNetworkPropagationLayerForward(l1, AprevLayer, autoencoder, networkIndex)
 
 		if(autoencoder):
 			if(l1 == numberOfLayers):
 				outputPred = tf.nn.softmax(Z)
 			else:
 				if(l1 == layer):
-					#go backwards
-					if(supportSkipLayers):
-						outputPredList = []
-						for l2 in range(0, l1):
-							WlayerB = Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")]
-							Zback = tf.matmul(A, WlayerB)
-							outputPredPartial = tf.nn.sigmoid(Zback)
-							#print("outputPredPartial.shape = ", outputPredPartial.shape)
-							outputPredList.append(outputPredPartial)
-						outputPred = tf.concat(outputPredList, axis=1)
-						#print("outputPred.shape = ", outputPred.shape)
-					else:
-						WlayerB = Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")]
-						Zback = tf.matmul(A, WlayerB)
-						outputPred = tf.nn.sigmoid(Zback)
+					outputPred = neuralNetworkPropagationLayerBackwardAutoencoder(l1, A, networkIndex)
 		else:
 			if(l1 == numberOfLayers):
 				outputPred = tf.nn.softmax(Z)
@@ -343,6 +320,49 @@ def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):
 			
 	return outputPred, outputTarget
 
+def neuralNetworkPropagationLayerForward(l1, AprevLayer, autoencoder, networkIndex=1):
+	outputTarget = None
+	
+	if(supportSkipLayers):
+		if(autoencoder):
+			outputTargetList = []
+		Z = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")].shape)
+		for l2 in range(0, l1):
+			WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
+			Z = tf.add(Z, tf.add(tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")]))	
+			if(autoencoder):
+				outputTargetListPartial = Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")]
+				outputTargetList.append(outputTargetListPartial)
+		if(autoencoder):
+			outputTarget = tf.concat(outputTargetList, axis=1)
+			#print("outputTarget.shape = ", outputTarget.shape)
+	else:	
+		WlayerF = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")]
+		if(autoencoder):
+			outputTarget = AprevLayer
+		Z = tf.add(tf.matmul(AprevLayer, WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")])
+	A = activationFunction(Z)
+	
+	return A, Z, outputTarget
+
+def neuralNetworkPropagationLayerBackwardAutoencoder(l1, A, networkIndex=1):
+	if(supportSkipLayers):
+		outputPredList = []
+		for l2 in range(0, l1):
+			WlayerB = Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")]
+			Zback = tf.matmul(A, WlayerB)
+			outputPredPartial = tf.nn.sigmoid(Zback)
+			#print("outputPredPartial.shape = ", outputPredPartial.shape)
+			outputPredList.append(outputPredPartial)
+		outputPred = tf.concat(outputPredList, axis=1)
+		#print("outputPred.shape = ", outputPred.shape)
+	else:
+		WlayerB = Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")]
+		Zback = tf.matmul(A, WlayerB)
+		outputPred = tf.nn.sigmoid(Zback)
+		
+	return outputPred
+		
 
 def activationFunction(Z):
 	A = tf.nn.relu(Z)
