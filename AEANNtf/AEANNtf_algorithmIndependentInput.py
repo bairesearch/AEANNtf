@@ -39,6 +39,8 @@ debugSingleLayerOnly = False
 debugFastTrain = False	#not supported
 debugSmallBatchSize = False	#not supported #small batch size for debugging matrix output
 
+supportMultipleNetworks = True	#optional
+
 generateVeryLargeNetwork = False
 if(learningAlgorithmAEANN):
 	supportDimensionalityReduction = True	#optional	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN) - this dimensionality reduction method is designed to be used in combination with a large autoencoder hidden layer (> input/output layer), as opposed to a small (bottlenecked) autoencoder hidden layer
@@ -65,6 +67,9 @@ if(generateDeepNetwork):
 Wf = {}
 Wb = {}
 B = {}
+if(supportMultipleNetworks):
+	WallNetworksFinalLayer = None
+	BallNetworksFinalLayer = None
 if(supportSkipLayers):
 	Ztrace = {}
 	Atrace = {}
@@ -75,6 +80,7 @@ numberOfLayers = 0
 numberOfNetworks = 0
 
 batchSize = 0
+
 
 #note high batchSize is required for learningAlgorithmStochastic algorithm objective functions (>= 100)
 def defineTrainingParameters(dataset):
@@ -160,10 +166,26 @@ def defineNeuralNetworkParameters():
 			if(supportSkipLayers):
 				Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
 				Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
-				
+	
+	if(supportMultipleNetworks):
+		if(numberOfNetworks > 1):
+			global WallNetworksFinalLayer
+			global BallNetworksFinalLayer
+			WlayerF = randomNormal([n_h[numberOfLayers-1]*numberOfNetworks, n_h[numberOfLayers]])
+			WallNetworksFinalLayer = tf.Variable(WlayerF)
+			Blayer = tf.zeros(n_h[numberOfLayers])
+			BallNetworksFinalLayer	= tf.Variable(Blayer)	#not currently used
+			
 def neuralNetworkPropagation(x, networkIndex=1):	#this general function is not used (specific functions called by ANNtf2)
 	return neuralNetworkPropagationAEANNfinalLayer(x, networkIndex=networkIndex)
 	#return neuralNetworkPropagationAEANNtest(x, networkIndex=1)
+
+#if(ANNtf2_algorithm.supportMultipleNetworks):
+def neuralNetworkPropagationLayer(x, networkIndex=1, l=None):
+   pred, _ = neuralNetworkPropagationAEANN(x, autoencoder=False, layer=l, networkIndex=networkIndex)
+   return pred
+#def neuralNetworkPropagationAEANNtestLayer(x, l, networkIndex=1):
+#   return neuralNetworkPropagationAEANN(x, autoencoder=False, layer=l, networkIndex=networkIndex)
 
 def neuralNetworkPropagationAEANNautoencoderLayer(x, layer, networkIndex=1):
 	return neuralNetworkPropagationAEANN(x, autoencoder=True, layer=layer, networkIndex=networkIndex)
@@ -172,13 +194,13 @@ def neuralNetworkPropagationAEANNfinalLayer(x, networkIndex=1):
 	pred, target = neuralNetworkPropagationAEANN(x, autoencoder=False, layer=numberOfLayers, networkIndex=networkIndex)
 	return pred
 	
-#not currently used;
-#def neuralNetworkPropagationAEANNtest(x, networkIndex=1):
-#   return neuralNetworkPropagationAEANN(x, autoencoder=False, layer=None, networkIndex=networkIndex)
-#def neuralNetworkPropagationAEANNtestLayer(x, l, networkIndex=1):
-#   return neuralNetworkPropagationAEANN(x, autoencoder=False, layer=l, networkIndex=networkIndex)
 
-
+#if(supportMultipleNetworks):
+def neuralNetworkPropagationAllNetworksFinalLayer(AprevLayer):
+	Z = tf.add(tf.matmul(AprevLayer, WallNetworksFinalLayer), BallNetworksFinalLayer)	
+	#Z = tf.matmul(AprevLayer, WallNetworksFinalLayer)	
+	pred = tf.nn.softmax(Z)	
+	return pred
 	
 def neuralNetworkPropagationAEANNdimensionalityReduction(x, networkIndex=1):
 

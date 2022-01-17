@@ -53,10 +53,13 @@ suppressGradientDoNotExistForVariablesWarnings = True
 
 if(algorithmAEANN == "AEANNindependentInput"):
 	useSmallSentenceLengths = False
-	
+
+	trainMultipleNetworks = False	#optional	
 	trainMultipleFiles = False
-	trainMultipleNetworks = False
-	numberOfNetworks = 1
+	if(trainMultipleNetworks):
+		numberOfNetworks = 5
+	else:
+		numberOfNetworks = 1
 elif(algorithmAEANN == "AEANNsequentialInput"):
 	#performance enhancements for development environment only: 
 	trainMultipleFiles = False	#can set to true for production (after testing algorithm)
@@ -129,8 +132,6 @@ else:
 			
 if(algorithmAEANN == "AEANNindependentInput"):
 	dataset = "SmallDataset"
-	#trainMultipleNetworks = True	#default: False
-	#numberOfNetworks = 3	#default: 1
 elif(algorithmAEANN == "AEANNsequentialInput"):
 	dataset = "wikiXmlDataset"
 	#if(AEANNsequentialInputTypeMinWordVectors):
@@ -192,6 +193,12 @@ def neuralNetworkPropagationTest(test_x, networkIndex=1):
 def neuralNetworkPropagation(x, networkIndex=1, l=None):
 	return AEANNtf_algorithm.neuralNetworkPropagation(x, networkIndex)
 
+#if(ANNtf2_algorithm.supportMultipleNetworks):
+def neuralNetworkPropagationLayer(x, networkIndex, l):
+	return AEANNtf_algorithm.neuralNetworkPropagationLayer(x, networkIndex, l)
+def neuralNetworkPropagationAllNetworksFinalLayer(x):
+	return AEANNtf_algorithm.neuralNetworkPropagationAllNetworksFinalLayer(x)
+	
 def trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display, autoencoder=False, s=None, l=None):
 	
 	#print("trainMultipleFiles error: does not support greedy training for AEANN")
@@ -392,7 +399,75 @@ def calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossE
 			pass
 
 	return loss, acc
+
+
+
+#if(ANNtf2_algorithm.supportMultipleNetworks):
+
+def testBatchAllNetworksFinalLayer(batchX, batchY, datasetNumClasses, numberOfLayers):
 	
+	AfinalHiddenLayerList = []
+	for networkIndex in range(1, numberOfNetworks+1):
+		AfinalHiddenLayer = neuralNetworkPropagationLayer(batchX, networkIndex, numberOfLayers-1)
+		AfinalHiddenLayerList.append(AfinalHiddenLayer)	
+	AfinalHiddenLayerTensor = tf.concat(AfinalHiddenLayerList, axis=1)
+	
+	pred = neuralNetworkPropagationAllNetworksFinalLayer(AfinalHiddenLayerTensor)
+	acc = calculateAccuracy(pred, batchY)
+	print("Combined network: Test Accuracy: %f" % (acc))
+	
+	
+	
+def trainBatchAllNetworksFinalLayer(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, costCrossEntropyWithLogits, display):
+	
+	AfinalHiddenLayerList = []
+	#print("numberOfNetworks = ", numberOfNetworks)
+	for networkIndex in range(1, numberOfNetworks+1):
+		AfinalHiddenLayer = neuralNetworkPropagationLayer(batchX, networkIndex, numberOfLayers-1)	
+		AfinalHiddenLayerList.append(AfinalHiddenLayer)	
+	AfinalHiddenLayerTensor = tf.concat(AfinalHiddenLayerList, axis=1)
+	#print("AfinalHiddenLayerTensor.shape = ", AfinalHiddenLayerTensor.shape)
+	
+	executeOptimisationAllNetworksFinalLayer(AfinalHiddenLayerTensor, batchY, datasetNumClasses, optimizer)
+
+	pred = None
+	if(display):
+		loss, acc = calculatePropagationLossAllNetworksFinalLayer(AfinalHiddenLayerTensor, batchY, datasetNumClasses, costCrossEntropyWithLogits)
+		print("Combined network: batchIndex: %i, loss: %f, accuracy: %f" % (batchIndex, loss, acc))
+						
+def executeOptimisationAllNetworksFinalLayer(x, y, datasetNumClasses, optimizer):
+	with tf.GradientTape() as gt:
+		loss, acc = calculatePropagationLossAllNetworksFinalLayer(x, y, datasetNumClasses, costCrossEntropyWithLogits)
+		
+	Wlist = []
+	Blist = []
+	Wlist.append(AEANNtf_algorithm.WallNetworksFinalLayer)
+	Blist.append(AEANNtf_algorithm.BallNetworksFinalLayer)
+	trainableVariables = Wlist + Blist
+
+	gradients = gt.gradient(loss, trainableVariables)
+						
+	if(suppressGradientDoNotExistForVariablesWarnings):
+		optimizer.apply_gradients([
+    		(grad, var) 
+    		for (grad, var) in zip(gradients, trainableVariables) 
+    		if grad is not None
+			])
+	else:
+		optimizer.apply_gradients(zip(gradients, trainableVariables))
+			
+def calculatePropagationLossAllNetworksFinalLayer(x, y, datasetNumClasses, costCrossEntropyWithLogits):
+	acc = 0	#only valid for softmax class targets 
+	pred = neuralNetworkPropagationAllNetworksFinalLayer(x)
+	#print("calculatePropagationLossAllNetworksFinalLayer: pred = ", pred)
+	target = y
+	loss = calculateLossCrossEntropy(pred, target, datasetNumClasses, costCrossEntropyWithLogits)	
+	acc = calculateAccuracy(pred, target)	#only valid for softmax class targets 
+
+	return loss, acc
+	
+	
+		
 def loadDataset(fileIndex):
 
 	global numberOfFeaturesPerWord
@@ -517,37 +592,22 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 					(batchX, batchY) = trainDataListIterators[trainDataIndex].get_next()	#next(trainDataListIterators[trainDataIndex])
 					batchYactual = batchY
 					
-					#trainMultipleNetworks code;
-					predNetworkAverage = tf.Variable(tf.zeros(datasetNumClasses))
 					for networkIndex in range(1, maxNetwork+1):
-
 						display = False
 						#if(l == maxLayer):	#only print accuracy after training final layer
 						if(batchIndex % displayStep == 0):
 							display = True	
-						pred = trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display, l=l)
-						if(pred is not None):
-							predNetworkAverage = predNetworkAverage + pred
+						trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display, l=l)
 						
 					#trainMultipleNetworks code;
-					if(trainMultipleNetworks):
-						if(display):
-							predNetworkAverage = predNetworkAverage / numberOfNetworks
-							loss = calculateLossCrossEntropy(predNetworkAverage, batchYactual, datasetNumClasses, costCrossEntropyWithLogits)
-							acc = calculateAccuracy(predNetworkAverage, batchYactual)
-							print("batchIndex: %i, loss: %f, accuracy: %f" % (batchIndex, loss, acc))	
+					if(l == maxLayer):
+						if(trainMultipleNetworks):
+							#train combined network final layer
+							trainBatchAllNetworksFinalLayer(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, costCrossEntropyWithLogits, display)
 
 				#trainMultipleNetworks code;
-				if(trainMultipleNetworks):
-					predNetworkAverageAll = tf.Variable(tf.zeros([testBatchY.shape[0], datasetNumClasses]))
-					for networkIndex in range(1, numberOfNetworks+1):
-						pred = neuralNetworkPropagationTest(testBatchX, networkIndex)
-						print("Test Accuracy: networkIndex: %i, %f" % (networkIndex, calculateAccuracy(pred, testBatchY)))
-						predNetworkAverageAll = predNetworkAverageAll + pred
-					predNetworkAverageAll = predNetworkAverageAll / numberOfNetworks
-					#print("predNetworkAverageAll", predNetworkAverageAll)
-					acc = calculateAccuracy(predNetworkAverageAll, testBatchY)
-					print("Test Accuracy: %f" % (acc))
+				if(trainMultipleNetworks and (l == maxLayer)):
+					testBatchAllNetworksFinalLayer(testBatchX, testBatchY, datasetNumClasses, numberOfLayers)
 				else:
 					pred = neuralNetworkPropagationTest(testBatchX, networkIndex)
 					if(greedy):
@@ -751,7 +811,7 @@ def trainSequentialInputNetwork(batchIndex, AEANNsequentialInputTypeIndex, batch
 						batchX = None	#already set by AEANNtf_algorithm.neuralNetworkPropagationAEANNsetInput(batchInputVector)
 					batchY = None	#not used by autoencoder learning
 					autoencoder = True
-					pred = trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display, autoencoder, s, l)
+					trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display, autoencoder, s, l)
 			if(AEANNtf_algorithm.lateralConnectivity):
 				if(AEANNtf_algorithm.lateralAutoencoder):
 					#lateral connnectivity is already trained above
@@ -761,9 +821,6 @@ def trainSequentialInputNetwork(batchIndex, AEANNsequentialInputTypeIndex, batch
 					#batchY = samplesInputVectors[:, batchYs, :]	#predict next element in sequence
 					print("trainSequentialInputNetwork error: lateralSemisupervised not currently supported")
 					exit()
-
-			#if(pred is not None):
-			#	predNetworkAverage = predNetworkAverage + pred
 
 	#pred = neuralNetworkPropagationTest(test_x, networkIndex)
 	#if(greedy):
@@ -788,7 +845,7 @@ def generateRandomisedIndexArray(indexFirst, indexLast, arraySize=None):
 	
 if __name__ == "__main__":
 	if(algorithmAEANN == "AEANNindependentInput"):
-		train(greedy=True)
+		train(greedy=True, trainMultipleNetworks=trainMultipleNetworks)
 	elif(algorithmAEANN == "AEANNsequentialInput"):
 		trainSequentialInput(trainMultipleFiles=trainMultipleFiles, greedy=True)
 
