@@ -30,39 +30,52 @@ import ANNtf2_globalDefs
 import ANNtf2_algorithmLIANN_math	#required for supportDimensionalityReduction
 np.set_printoptions(suppress=True)
 
-learningAlgorithmAEANN = False #AEANN backprop; default algorithm
-learningAlgorithmLIANN = True	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only
-learningAlgorithmNone = False	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
-#learningAlgorithmRUANNSUANN = False	#incomplete #perform stocastic update of weights (SUANN) based on RUANN (hypothetical AEANN hidden layer neuron activation/relaxation state modifications)
-
+#debug parameters;
+debugSmallNetwork = False	#not supported #small network for debugging matrix output
+debugSmallBatchSize = False	#not supported #small batch size for debugging matrix output
 debugSingleLayerOnly = False
 debugFastTrain = False	#not supported
-debugSmallBatchSize = False	#not supported #small batch size for debugging matrix output
+
+#select learningAlgorithm:
+learningAlgorithmAEANN = False #AEANN backprop; default algorithm
+learningAlgorithmLIANN = False	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only
+learningAlgorithmNone = True	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
+#learningAlgorithmRUANNSUANN = False	#incomplete #perform stocastic update of weights (SUANN) based on RUANN (hypothetical AEANN hidden layer neuron activation/relaxation state modifications)
+
+#intialise network properties (configurable);	
+supportSkipLayers = False #fully connected skip layer network
 
 supportMultipleNetworks = True	#optional
 
+#learning algorithm customisation;
 generateVeryLargeNetwork = False
 if(learningAlgorithmAEANN):
 	supportDimensionalityReduction = True	#optional	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN) - this dimensionality reduction method is designed to be used in combination with a large autoencoder hidden layer (> input/output layer), as opposed to a small (bottlenecked) autoencoder hidden layer
 elif(learningAlgorithmLIANN):
-	generateVeryLargeNetwork = True	#default: True
+	if(not debugSmallNetwork):
+		generateVeryLargeNetwork = True	#default: True
 	supportDimensionalityReduction = True	#mandatory	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN)
 elif(learningAlgorithmNone):
 	generateVeryLargeNetwork = True
 	supportDimensionalityReduction = False
-		
-supportSkipLayers = True #fully connected skip layer network
+
+supportDimensionalityReductionLimitFrequency = False
 if(supportDimensionalityReduction):
 	supportDimensionalityReductionRandomise	= True	#randomise weights of highly correlated neurons, else zero them (effectively eliminating neuron from network, as its weights are no longer able to be trained)
 	maxCorrelation = 0.95	#requires tuning
+	supportDimensionalityReductionLimitFrequency = True
+	if(supportDimensionalityReductionLimitFrequency):
+		supportDimensionalityReductionLimitFrequencyStep = 1000
 
+#intialise network properties;
 largeBatchSize = False	#not supported	#else train each layer using entire training set
-generateLargeNetwork = True	#required #CHECKTHIS: autoencoder does not require bottleneck
+generateLargeNetwork = True	#required #CHECKTHIS: autoencoder does not require bottleneck	#for default AEANN operations
 generateNetworkStatic = False	#optional
 generateDeepNetwork = True	#optional	#used for algorithm testing
 if(generateDeepNetwork):
 	generateNetworkStatic = True	#True: autoencoder requires significant number of neurons to retain performance?
-	
+
+#network/activation parameters;
 #forward excitatory connections;
 Wf = {}
 Wb = {}

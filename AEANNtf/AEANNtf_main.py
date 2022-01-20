@@ -217,7 +217,14 @@ def trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, op
 	#loss, acc before gradient descent
 	
 	if((algorithmAEANN == "AEANNindependentInput") and AEANNtf_algorithm.supportDimensionalityReduction):
-		AEANNtf_algorithm.neuralNetworkPropagationAEANNdimensionalityReduction(batchX, networkIndex)	
+		executeLIANN = False
+		if(AEANNtf_algorithm.supportDimensionalityReductionLimitFrequency):
+			if(batchIndex % AEANNtf_algorithm.supportDimensionalityReductionLimitFrequencyStep == 0):
+				executeLIANN = True
+		else:
+			executeLIANN = True
+		if(executeLIANN):
+			AEANNtf_algorithm.neuralNetworkPropagationAEANNdimensionalityReduction(batchX, networkIndex)	
 
 	pred = None
 	if(display):
@@ -236,8 +243,6 @@ def trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, op
 		else:
 			print("networkIndex: %i, batchIndex: %i, loss: %f, accuracy: %f" % (networkIndex, batchIndex, loss, acc))
 			
-	return pred
-
 def executeOptimisation(x, y, datasetNumClasses, numberOfLayers, optimizer, networkIndex=1, autoencoder=False, s=None, l1=None):
 	with tf.GradientTape() as gt:
 		loss, acc = calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex, autoencoder, s, l1)
@@ -370,7 +375,10 @@ def calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossE
 			acc = calculateAccuracy(pred, target)	#only valid for softmax class targets 
 			#print("target = ", target)
 			#print("pred = ", pred)
+			#print("x = ", x)
+			#print("y = ", y)
 			#print("2 loss = ", loss)
+			#print("2 acc = ", acc)
 		else:
 			pred, target = AEANNtf_algorithm.neuralNetworkPropagationAEANNautoencoderLayer(x, l, networkIndex)
 			loss = calculateLossMeanSquaredError(pred, target)
