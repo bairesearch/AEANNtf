@@ -54,10 +54,13 @@ suppressGradientDoNotExistForVariablesWarnings = True
 if(algorithmAEANN == "AEANNindependentInput"):
 	useSmallSentenceLengths = False
 
-	trainMultipleNetworks = False	#optional	
 	trainMultipleFiles = False
+	trainMultipleNetworks = True	#optional
 	if(trainMultipleNetworks):
-		numberOfNetworks = 5
+		#numberOfNetworks = 10
+		numberOfNetworks = int(100/AEANNtf_algorithm.generateLargeNetworkRatio) #normalise the number of networks based on the network layer size
+		if(numberOfNetworks == 1):	#train at least 2 networks (required for tensorflow code execution consistency)
+			trainMultipleNetworks = False
 	else:
 		numberOfNetworks = 1
 elif(algorithmAEANN == "AEANNsequentialInput"):

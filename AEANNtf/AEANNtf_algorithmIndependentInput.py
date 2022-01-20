@@ -47,6 +47,15 @@ supportSkipLayers = False #fully connected skip layer network
 
 supportMultipleNetworks = True	#optional
 
+
+#intialise network properties;
+generateLargeNetwork = True	#required #CHECKTHIS: autoencoder does not require bottleneck	#for default AEANN operations
+largeBatchSize = False	#not supported	#else train each layer using entire training set
+generateNetworkStatic = False	#optional
+generateDeepNetwork = True	#optional	#used for algorithm testing
+if(generateDeepNetwork):
+	generateNetworkStatic = True	#True: autoencoder requires significant number of neurons to retain performance?
+
 #learning algorithm customisation;
 generateVeryLargeNetwork = False
 if(learningAlgorithmAEANN):
@@ -56,8 +65,17 @@ elif(learningAlgorithmLIANN):
 		generateVeryLargeNetwork = True	#default: True
 	supportDimensionalityReduction = True	#mandatory	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN)
 elif(learningAlgorithmNone):
+	#can pass different task datasets through a shared randomised net
 	generateVeryLargeNetwork = True
 	supportDimensionalityReduction = False
+
+if(generateVeryLargeNetwork):
+	generateLargeNetworkRatio = 100	#100	#default: 10
+else:
+	if(generateLargeNetwork):
+		generateLargeNetworkRatio = 3
+	else:
+		generateLargeNetworkRatio = 1
 
 supportDimensionalityReductionLimitFrequency = False
 if(supportDimensionalityReduction):
@@ -67,13 +85,6 @@ if(supportDimensionalityReduction):
 	if(supportDimensionalityReductionLimitFrequency):
 		supportDimensionalityReductionLimitFrequencyStep = 1000
 
-#intialise network properties;
-largeBatchSize = False	#not supported	#else train each layer using entire training set
-generateLargeNetwork = True	#required #CHECKTHIS: autoencoder does not require bottleneck	#for default AEANN operations
-generateNetworkStatic = False	#optional
-generateDeepNetwork = True	#optional	#used for algorithm testing
-if(generateDeepNetwork):
-	generateNetworkStatic = True	#True: autoencoder requires significant number of neurons to retain performance?
 
 #network/activation parameters;
 #forward excitatory connections;
@@ -130,13 +141,7 @@ def defineNetworkParameters(num_input_neurons, num_output_neurons, datasetNumFea
 	global numberOfLayers
 	global numberOfNetworks
 		
-	if(generateVeryLargeNetwork):
-		firstHiddenLayerNumberNeurons = num_input_neurons*10
-	else:
-		if(generateLargeNetwork):
-			firstHiddenLayerNumberNeurons = num_input_neurons*3
-		else:
-			firstHiddenLayerNumberNeurons = num_input_neurons
+	firstHiddenLayerNumberNeurons = num_input_neurons*generateLargeNetworkRatio
 	if(debugSingleLayerOnly):
 		numberOfLayers = 1
 	else:
