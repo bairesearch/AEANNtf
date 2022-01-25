@@ -10,7 +10,7 @@ MIT License
 see AEANNtf_main.py
 
 # Usage:
-see ANNtf2.py
+see AEANNtf_main.py
 
 # Description:
 AEANN algorithm independent input - define autoencoder generated artificial neural network
@@ -37,15 +37,15 @@ debugSingleLayerOnly = False
 debugFastTrain = False	#not supported
 
 #select learningAlgorithm:
-learningAlgorithmAEANN = False #AEANN backprop; default algorithm
+learningAlgorithmAEANN = True #AEANN backprop; default algorithm
 learningAlgorithmLIANN = False	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only
-learningAlgorithmNone = True	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
+learningAlgorithmNone = False	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
 #learningAlgorithmRUANNSUANN = False	#incomplete #perform stocastic update of weights (SUANN) based on RUANN (hypothetical AEANN hidden layer neuron activation/relaxation state modifications)
 
 #intialise network properties (configurable);	
-supportSkipLayers = False #fully connected skip layer network
+supportSkipLayers = True #fully connected skip layer network
 
-supportMultipleNetworks = True	#optional
+supportMultipleNetworks = True	#optional (required to activate set trainMultipleNetworks=True in AEANNtf_main)
 
 
 #intialise network properties;

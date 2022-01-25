@@ -7,10 +7,10 @@ Richard Bruce Baxter - Copyright (c) 2020-2022 Baxter AI (baxterai.com)
 MIT License
 
 # Installation:
-see ANNtf2.py
+see AEANNtf_main.py
 
 # Usage:
-see ANNtf2.py
+see AEANNtf_main.py
 
 # Description:
 AEANN algorithm sequential input - define autoencoder generated artificial neural network for sequential input (characters, words, sentences, paragraphs etc)

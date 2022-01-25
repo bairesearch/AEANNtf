@@ -55,7 +55,7 @@ if(algorithmAEANN == "AEANNindependentInput"):
 	useSmallSentenceLengths = False
 
 	trainMultipleFiles = False
-	trainMultipleNetworks = True	#optional
+	trainMultipleNetworks = False	#optional
 	if(trainMultipleNetworks):
 		#numberOfNetworks = 10
 		numberOfNetworks = int(100/AEANNtf_algorithm.generateLargeNetworkRatio) #normalise the number of networks based on the network layer size
