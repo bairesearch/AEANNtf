@@ -737,7 +737,7 @@ def generatePOSambiguityInfoUnambiguousPermutationArray(POSambiguityInfoUnambigu
 
 
 #useSmallSentenceLengths: eliminate smaller sentences from dataset (do not crop them)
-def loadDatasetType4(datasetFileNameX, AEANNsequentialInputTypesMaxLength, useSmallSentenceLengths, AEANNsequentialInputTypeTrainWordVectors):
+def loadDatasetType4(datasetFileNameX, sequentialInputTypesMaxLength, useSmallSentenceLengths, sequentialInputTypeTrainWordVectors):
 	
 	splitTextDatasetByWikiTags = True
 	
@@ -770,10 +770,10 @@ def loadDatasetType4(datasetFileNameX, AEANNsequentialInputTypesMaxLength, useSm
 				wordsText = tokenize.word_tokenize(sentence)
 				sentenceLengthCheck = True
 				if(useSmallSentenceLengths):
-					if(len(wordsText) > AEANNsequentialInputTypesMaxLength[1]):
+					if(len(wordsText) > sequentialInputTypesMaxLength[1]):
 						sentenceLengthCheck = False				
 				if(sentenceLengthCheck):
-					if(AEANNsequentialInputTypeTrainWordVectors):
+					if(sequentialInputTypeTrainWordVectors):
 						words = []
 						for wordIndex, word in enumerate(wordsText):
 							#print("\t\t\t\twordIndex = ", wordIndex)
