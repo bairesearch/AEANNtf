@@ -13,7 +13,7 @@ see AEANNtf_main.py
 see AEANNtf_main.py
 
 # Description:
-AEANN algorithm sequential input - define autoencoder generated artificial neural network for sequential input (characters, words, sentences, paragraphs etc)
+AEANNtf algorithm sequential input - define autoencoder generated artificial neural network for sequential input (characters, words, sentences, paragraphs etc)
 
 Greedy layer construction using autoencoders
 

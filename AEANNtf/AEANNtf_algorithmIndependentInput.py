@@ -13,7 +13,7 @@ see AEANNtf_main.py
 see AEANNtf_main.py
 
 # Description:
-AEANN algorithm independent input - define autoencoder generated artificial neural network
+AEANNtf algorithm independent input - define autoencoder generated artificial neural network for independent input (non-sequential)
 
 Greedy layer construction using autoencoders
 
@@ -27,7 +27,7 @@ import copy
 from ANNtf2_operations import *	#generateParameterNameSeq, generateParameterName, defineNetworkParameters
 import ANNtf2_operations
 import ANNtf2_globalDefs
-import ANNtf2_algorithmLIANN_math	#required for supportDimensionalityReduction
+#import LIANNtf_algorithmLIANN_math	#required for supportDimensionalityReduction
 np.set_printoptions(suppress=True)
 
 #debug parameters;
@@ -38,7 +38,7 @@ debugFastTrain = False	#not supported
 
 #select learningAlgorithm:
 learningAlgorithmAEANN = True #AEANN backprop; default algorithm
-learningAlgorithmLIANN = False	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only
+#learningAlgorithmLIANN = False	#support disabled (see LIANNtf_algorithmLIANN)	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only
 learningAlgorithmNone = False	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
 #learningAlgorithmRUANNSUANN = False	#incomplete #perform stocastic update of weights (SUANN) based on RUANN (hypothetical AEANN hidden layer neuron activation/relaxation state modifications)
 
@@ -59,15 +59,16 @@ if(generateDeepNetwork):
 #learning algorithm customisation;
 generateVeryLargeNetwork = False
 if(learningAlgorithmAEANN):
-	supportDimensionalityReduction = True	#optional	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN) - this dimensionality reduction method is designed to be used in combination with a large autoencoder hidden layer (> input/output layer), as opposed to a small (bottlenecked) autoencoder hidden layer
-elif(learningAlgorithmLIANN):
-	if(not debugSmallNetwork):
-		generateVeryLargeNetwork = True	#default: True
-	supportDimensionalityReduction = True	#mandatory	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN)
+	pass
+	#supportDimensionalityReduction = True	#optional	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN) - this dimensionality reduction method is designed to be used in combination with a large autoencoder hidden layer (> input/output layer), as opposed to a small (bottlenecked) autoencoder hidden layer
 elif(learningAlgorithmNone):
 	#can pass different task datasets through a shared randomised net
 	generateVeryLargeNetwork = True
-	supportDimensionalityReduction = False
+	#supportDimensionalityReduction = False
+#elif(learningAlgorithmLIANN):
+#	if(not debugSmallNetwork):
+#		generateVeryLargeNetwork = True	#default: True
+#	supportDimensionalityReduction = True	#mandatory	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN)
 
 if(generateVeryLargeNetwork):
 	generateLargeNetworkRatio = 100	#100	#default: 10
@@ -77,13 +78,13 @@ else:
 	else:
 		generateLargeNetworkRatio = 1
 
-supportDimensionalityReductionLimitFrequency = False
-if(supportDimensionalityReduction):
-	supportDimensionalityReductionRandomise	= True	#randomise weights of highly correlated neurons, else zero them (effectively eliminating neuron from network, as its weights are no longer able to be trained)
-	maxCorrelation = 0.95	#requires tuning
-	supportDimensionalityReductionLimitFrequency = True
-	if(supportDimensionalityReductionLimitFrequency):
-		supportDimensionalityReductionLimitFrequencyStep = 1000
+#supportDimensionalityReductionLimitFrequency = False
+#if(supportDimensionalityReduction):
+#	supportDimensionalityReductionRandomise	= True	#randomise weights of highly correlated neurons, else zero them (effectively eliminating neuron from network, as its weights are no longer able to be trained)
+#	maxCorrelation = 0.95	#requires tuning
+#	supportDimensionalityReductionLimitFrequency = True
+#	if(supportDimensionalityReductionLimitFrequency):
+#		supportDimensionalityReductionLimitFrequencyStep = 1000
 
 
 #network/activation parameters;
@@ -220,22 +221,22 @@ def neuralNetworkPropagationAllNetworksFinalLayer(AprevLayer):
 	pred = tf.nn.softmax(Z)	
 	return pred
 	
-def neuralNetworkPropagationAEANNdimensionalityReduction(x, networkIndex=1):
-
-	AprevLayer = x
-	if(supportSkipLayers):
-		Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")] = AprevLayer
-		
-	for l1 in range(1, numberOfLayers):	#ignore first/last layer
-		
-		A, Z, outputTarget = neuralNetworkPropagationLayerForward(l1, AprevLayer, False, networkIndex)
-	
-		ANNtf2_algorithmLIANN_math.neuronActivationCorrelationMinimisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=Wb, Wbname="Wb", updateAutoencoderBackwardsWeights=True, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, maxCorrelation=maxCorrelation)
-		
-		AprevLayer = A	#CHECKTHIS: note uses A value prior to weight updates
-		if(supportSkipLayers):
-			Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = Z
-			Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = A
+#def neuralNetworkPropagationAEANNdimensionalityReduction(x, networkIndex=1):
+#
+#	AprevLayer = x
+#	if(supportSkipLayers):
+#		Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")] = AprevLayer
+#		
+#	for l1 in range(1, numberOfLayers):	#ignore first/last layer
+#		
+#		A, Z, outputTarget = neuralNetworkPropagationLayerForward(l1, AprevLayer, False, networkIndex)
+#	
+#		LIANNtf_algorithmLIANN_math.neuronActivationCorrelationMinimisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=Wb, Wbname="Wb", updateAutoencoderBackwardsWeights=True, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, maxCorrelation=maxCorrelation)
+#		
+#		AprevLayer = A	#CHECKTHIS: note uses A value prior to weight updates
+#		if(supportSkipLayers):
+#			Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = Z
+#			Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = A
 
 			
 def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):

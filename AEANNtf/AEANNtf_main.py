@@ -21,7 +21,7 @@ python3 -m spacy download en_core_web_md
 python3 AEANNtf_main.py
 
 # Description:
-AEANN - train an AEANN (autoencoder artificial neural network)
+AEANNtf - train an autoencoder generated artificial neural network (AEANN)
 
 """
 
@@ -209,7 +209,7 @@ def trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, op
 	if(algorithmAEANN == "AEANNindependentInput"):
 		if(AEANNtf_algorithm.learningAlgorithmAEANN):
 			loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, autoencoder, s, l)
-		elif(AEANNtf_algorithm.learningAlgorithmLIANN or AEANNtf_algorithm.learningAlgorithmNone):
+		elif(AEANNtf_algorithm.learningAlgorithmNone):	#elif(AEANNtf_algorithm.learningAlgorithmLIANN or AEANNtf_algorithm.learningAlgorithmNone):
 			if(l==numberOfLayers):
 				loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, autoencoder, s, l)
 		else:
@@ -219,22 +219,22 @@ def trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, op
 		loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, autoencoder, s, l)
 	#loss, acc before gradient descent
 	
-	if((algorithmAEANN == "AEANNindependentInput") and AEANNtf_algorithm.supportDimensionalityReduction):
-		executeLIANN = False
-		if(AEANNtf_algorithm.supportDimensionalityReductionLimitFrequency):
-			if(batchIndex % AEANNtf_algorithm.supportDimensionalityReductionLimitFrequencyStep == 0):
-				executeLIANN = True
-		else:
-			executeLIANN = True
-		if(executeLIANN):
-			AEANNtf_algorithm.neuralNetworkPropagationAEANNdimensionalityReduction(batchX, networkIndex)	
+	#if((algorithmAEANN == "AEANNindependentInput") and AEANNtf_algorithm.supportDimensionalityReduction):
+	#	executeLIANN = False
+	#	if(AEANNtf_algorithm.supportDimensionalityReductionLimitFrequency):
+	#		if(batchIndex % AEANNtf_algorithm.supportDimensionalityReductionLimitFrequencyStep == 0):
+	#			executeLIANN = True
+	#	else:
+	#		executeLIANN = True
+	#	if(executeLIANN):
+	#		AEANNtf_algorithm.neuralNetworkPropagationAEANNdimensionalityReduction(batchX, networkIndex)	
 
 	pred = None
 	if(display):
 		if(algorithmAEANN == "AEANNindependentInput"):
 			if(AEANNtf_algorithm.learningAlgorithmAEANN):
 				loss, acc = calculatePropagationLoss(batchX, batchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex, autoencoder, s, l)	#display l autoencoder loss	
-			elif(AEANNtf_algorithm.learningAlgorithmLIANN or AEANNtf_algorithm.learningAlgorithmNone): 
+			elif(AEANNtf_algorithm.learningAlgorithmNone): 	#elif(AEANNtf_algorithm.learningAlgorithmLIANN or AEANNtf_algorithm.learningAlgorithmNone): 
 				loss, acc = calculatePropagationLoss(batchX, batchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex, autoencoder, s, l=numberOfLayers)	#display final layer loss
 			else:
 				print("trainBatch error: algorithmAEANN==AEANNindependentInput and AEANNtf_algorithm.learningAlgorithm unknown")
