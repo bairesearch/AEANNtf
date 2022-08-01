@@ -1,7 +1,7 @@
 """AEANNtf_algorithmIndependentInput.py
 
 # Author:
-Richard Bruce Baxter - Copyright (c) 2020-2022 Baxter AI (baxterai.com)
+Richard Bruce Baxter - Copyright (c) 2021-2022 Baxter AI (baxterai.com)
 
 # License:
 MIT License
@@ -292,10 +292,11 @@ def neuralNetworkPropagationLayerForward(l1, AprevLayer, autoencoder, networkInd
 		Z = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")].shape)
 		for l2 in range(0, l1):
 			WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
-			Z = tf.add(Z, tf.add(tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")]))	
+			Z = tf.add(Z, tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF))	
 			if(autoencoder):
 				outputTargetListPartial = Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")]
 				outputTargetList.append(outputTargetListPartial)
+		Z = tf.add(Z, B[generateParameterNameNetwork(networkIndex, l1, "B")])
 		if(autoencoder):
 			outputTarget = tf.concat(outputTargetList, axis=1)
 			#print("outputTarget.shape = ", outputTarget.shape)

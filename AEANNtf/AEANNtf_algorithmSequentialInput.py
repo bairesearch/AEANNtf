@@ -1,7 +1,7 @@
 """AEANNtf_algorithmSequentialInput.py
 
 # Author:
-Richard Bruce Baxter - Copyright (c) 2020-2022 Baxter AI (baxterai.com)
+Richard Bruce Baxter - Copyright (c) 2021-2022 Baxter AI (baxterai.com)
 
 # License:
 MIT License
@@ -649,7 +649,7 @@ def neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentia
 								Wlayer = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")] 
 							else:
 								Wlayer = Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")] 							
-					Zpartial = tf.add(tf.matmul(Alayer2, Wlayer), B[generateParameterNameNetwork(networkIndex, l1, "B")])
+					Zpartial = tf.matmul(Alayer2, Wlayer)
 					if(forward):
 						Z = tf.add(Z, Zpartial)
 						if(not calculateLossAcrossAllActivations):
@@ -662,6 +662,7 @@ def neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentia
 						else:
 							Apartial = tf.nn.sigmoid(Zpartial)
 							autoencoderOutputList.append(Apartial)
+		Z = tf.add(Z, B[generateParameterNameNetwork(networkIndex, l1, "B")])
 	if(lateral):
 		if(supportFullLayerConnectivity):
 			l2max = numberOfLayers+1
@@ -714,7 +715,7 @@ def neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentia
 								Wlayer = Wlf[generateParameterNameNetwork(networkIndex, l1, "Wlf")]
 							else:
 								Wlayer = Wlb[generateParameterNameNetwork(networkIndex, l1, "Wlb")]							
-					Zpartial = tf.add(tf.matmul(Alayer2, WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")])
+					Zpartial = tf.matmul(Alayer2, WlayerF)
 					if(forward):
 						Z = tf.add(Z, Zpartial)	
 						if(not calculateLossAcrossAllActivations):
@@ -727,6 +728,7 @@ def neuralNetworkPropagationAEANNsequentialInputLayer(xSeq, s1, l1, maxSequentia
 						else:
 							Apartial = tf.nn.sigmoid(Zpartial)
 							autoencoderOutputList.append(Apartial)
+		Z = tf.add(Z, B[generateParameterNameNetwork(networkIndex, l1, "B")])
 
 	if(optimisationRequired):
 		if(not calculateLossAcrossAllActivations):
