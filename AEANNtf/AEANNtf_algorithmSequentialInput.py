@@ -27,9 +27,9 @@ Specification: AEANN-AutoencoderSequentialInputArchitectureDevelopment-29Decembe
 import spacy
 import tensorflow as tf
 import numpy as np
-from ANNtf2_operations import *	#generateParameterNameSeq, generateParameterName, defineNetworkParameters
-import ANNtf2_operations
-import ANNtf2_globalDefs
+from ANNtf_operations import *	#generateParameterNameSeq, generateParameterName, defineNetworkParameters
+import ANNtf_operations
+import ANNtf_globalDefs
 import copy
 
 spacyWordVectorGenerator = spacy.load('en_core_web_md')	#spacy.load('en_core_web_lg')
@@ -438,7 +438,7 @@ def defineNeuralNetworkParameters():
 
 			
 
-def neuralNetworkPropagation(x, networkIndex=1):	#this general function is not used (specific functions called by ANNtf2)
+def neuralNetworkPropagation(x, networkIndex=1):	#this general function is not used (specific functions called by ANNtf)
 	#return neuralNetworkPropagationAEANNfinalLayer(x, networkIndex=networkIndex)
 	return neuralNetworkPropagationAEANN(x, networkIndex)
 

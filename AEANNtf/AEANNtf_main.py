@@ -18,6 +18,7 @@ conda install spacy
 python3 -m spacy download en_core_web_md
 
 # Usage:
+source activate anntf2
 python3 AEANNtf_main.py
 
 # Description:
@@ -36,9 +37,9 @@ import sys
 np.set_printoptions(threshold=sys.maxsize)
 
 from itertools import zip_longest
-from ANNtf2_operations import *
+from ANNtf_operations import *
 import random
-import ANNtf2_loadDataset
+import ANNtf_loadDataset
 
 
 costCrossEntropyWithLogits = False
@@ -196,7 +197,7 @@ def neuralNetworkPropagationTest(test_x, networkIndex=1):
 def neuralNetworkPropagation(x, networkIndex=1, l=None):
 	return AEANNtf_algorithm.neuralNetworkPropagation(x, networkIndex)
 
-#if(ANNtf2_algorithm.supportMultipleNetworks):
+#if(ANNtf_algorithm.supportMultipleNetworks):
 def neuralNetworkPropagationLayer(x, networkIndex, l):
 	return AEANNtf_algorithm.neuralNetworkPropagationLayer(x, networkIndex, l)
 def neuralNetworkPropagationAllNetworksFinalLayer(x):
@@ -413,7 +414,7 @@ def calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossE
 
 
 
-#if(ANNtf2_algorithm.supportMultipleNetworks):
+#if(ANNtf_algorithm.supportMultipleNetworks):
 
 def testBatchAllNetworksFinalLayer(batchX, batchY, datasetNumClasses, numberOfLayers):
 	
@@ -503,15 +504,15 @@ def loadDataset(fileIndex):
 			
 	numberOfLayers = 0
 	if(dataset == "POStagSequence"):
-		numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_xTemp, train_yTemp, test_xTemp, test_yTemp = ANNtf2_loadDataset.loadDatasetType1(datasetType1FileNameX, datasetType1FileNameY)
+		numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_xTemp, train_yTemp, test_xTemp, test_yTemp = ANNtf_loadDataset.loadDatasetType1(datasetType1FileNameX, datasetType1FileNameY)
 	elif(dataset == "POStagSentence"):
-		numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_xTemp, train_yTemp, test_xTemp, test_yTemp = ANNtf2_loadDataset.loadDatasetType3(datasetType3FileNameX, generatePOSunambiguousInput, onlyAddPOSunambiguousInputToTrain, useSmallSentenceLengths)
+		numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_xTemp, train_yTemp, test_xTemp, test_yTemp = ANNtf_loadDataset.loadDatasetType3(datasetType3FileNameX, generatePOSunambiguousInput, onlyAddPOSunambiguousInputToTrain, useSmallSentenceLengths)
 	elif(dataset == "SmallDataset"):
-		datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_xTemp, train_yTemp, test_xTemp, test_yTemp = ANNtf2_loadDataset.loadDatasetType2(datasetType2FileName, datasetClassColumnFirst)
+		datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_xTemp, train_yTemp, test_xTemp, test_yTemp = ANNtf_loadDataset.loadDatasetType2(datasetType2FileName, datasetClassColumnFirst)
 		numberOfFeaturesPerWord = None
 		paddingTagIndex = None
 	elif(dataset == "wikiXmlDataset"):
-		articles = ANNtf2_loadDataset.loadDatasetType4(datasetType4FileName, AEANNsequentialInputTypesMaxLength, useSmallSentenceLengths, AEANNsequentialInputTypeTrainWordVectors)
+		articles = ANNtf_loadDataset.loadDatasetType4(datasetType4FileName, AEANNsequentialInputTypesMaxLength, useSmallSentenceLengths, AEANNsequentialInputTypeTrainWordVectors)
 
 	if(dataset == "wikiXmlDataset"):
 		return articles
@@ -520,7 +521,7 @@ def loadDataset(fileIndex):
 
 def processDatasetAEANN(AEANNsequentialInputTypeIndex, inputVectors):
 
-	percentageDatasetTrain = ANNtf2_loadDataset.percentageDatasetTrain
+	percentageDatasetTrain = ANNtf_loadDataset.percentageDatasetTrain
 	
 	datasetNumExamples = inputVectors.shape[0]
 

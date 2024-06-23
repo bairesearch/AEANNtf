@@ -1,4 +1,4 @@
-"""ANNtf2_loadDataset.py
+"""ANNtf_loadDataset.py
 
 # Author:
 Richard Bruce Baxter - Copyright (c) 2020-2022 Baxter AI (baxterai.com)
@@ -7,10 +7,10 @@ Richard Bruce Baxter - Copyright (c) 2020-2022 Baxter AI (baxterai.com)
 MIT License
 
 # Installation:
-see ANNtf2.py
+see ANNtf.py
 
 # Usage:
-see ANNtf2.py
+see ANNtf.py
 
 # Description:
 ANNtf load dataset
@@ -136,10 +136,10 @@ import csv
 import tensorflow as tf
 import numpy as np
 from numpy import genfromtxt
-import ANNtf2_globalDefs
-#from nltk import tokenize	#required for ANNtf2_loadDataset loadDatasetType4 only
+import ANNtf_globalDefs
+#from nltk import tokenize	#required for ANNtf_loadDataset loadDatasetType4 only
 import re
-import ANNtf2_operations
+import ANNtf_operations
 
 
 datasetFolderRelative = "datasets"
@@ -154,7 +154,7 @@ datasetType1alreadyNormalised = True	#if True, assume that the dataset includes 
 datasetType2alreadyNormalised = False	#if True, assume that the dataset includes values between 0 and 1 only
 datasetType3alreadyNormalised = True	#if True, assume that the dataset includes values between 0 and 1 only
 
-numberOfFeaturesPerWord = 53	#last feature identifies word as out of sentence padding (out of sentence padding is not expected by loadDatasetType3 as each row only contains data of a specific sentence length; out of sentence padding will be applied by ANNtf2_loadDataset after data is read)
+numberOfFeaturesPerWord = 53	#last feature identifies word as out of sentence padding (out of sentence padding is not expected by loadDatasetType3 as each row only contains data of a specific sentence length; out of sentence padding will be applied by ANNtf_loadDataset after data is read)
 optimiseFeedLength = True
 if(optimiseFeedLength):
 	paddingTagIndex = 9	#out of sentence features will be padded with this character
@@ -171,6 +171,14 @@ else:
 
 storeRowLengths = False
 
+def normaliseDataset(dataset):
+	#print("before normalisation: dataset = ", dataset)
+	layer = tf.keras.layers.experimental.preprocessing.Normalization(axis=-1)
+	layer.adapt(dataset)
+	datasetNormalised = layer(dataset)
+	#print("after normalisation: datasetNormalised = ", datasetNormalised)
+	return datasetNormalised
+	
 def createFileAbsPath(fileName):
 	scriptFolder = os.path.dirname(__file__) #<-- absolute dir the script is in
 	relFilePath = datasetFolderRelative + '/' + fileName
@@ -314,7 +322,7 @@ def hotEncode(y, maxY):
 	yHotEncoded[y-1] = 1
 	return yHotEncoded
 			
-def loadDatasetType1(datasetFileNameX, datasetFileNameY, addOnlyPriorUnidirectionalPOSinputToTrain=False, dataType=float):
+def loadDatasetType1(datasetFileNameX, datasetFileNameY, addOnlyPriorUnidirectionalPOSinputToTrain=False, dataType=float, normalise=False):
 	
 	#all_X = genfromtxt(datasetFileNameX, delimiter=' ', dtype=dataType)
 	#all_Y = genfromtxt(datasetFileNameY, delimiter=' ', dtype=dataType)
@@ -368,12 +376,16 @@ def loadDatasetType1(datasetFileNameX, datasetFileNameY, addOnlyPriorUnidirectio
 	train_y, test_y = np.array(train_y, np.uint8), np.array(test_y, np.uint8) 
 	#https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data?version=stable
 	#https://medium.com/@HojjatA/could-not-find-valid-device-for-node-while-eagerly-executing-8f2ff588d1e
-	
+
+	if(normalise):
+		train_x = normaliseDataset(train_x)
+		test_x = normaliseDataset(test_x)
+				
 	paddingTagIndexNA = paddingTagIndex
 	return numberOfFeaturesPerWord, paddingTagIndexNA, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y
 
 
-def loadDatasetType2(datasetFileName, classColumnFirst=True, equaliseNumberExamplesPerClass=False, dataType=float):
+def loadDatasetType2(datasetFileName, classColumnFirst=True, equaliseNumberExamplesPerClass=False, dataType=float, normalise=False):
 
 	numeriseClassColumn = True
 	
@@ -462,10 +474,14 @@ def loadDatasetType2(datasetFileName, classColumnFirst=True, equaliseNumberExamp
 	#https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data?version=stable
 	#https://medium.com/@HojjatA/could-not-find-valid-device-for-node-while-eagerly-executing-8f2ff588d1e
 
+	if(normalise):
+		train_x = normaliseDataset(train_x)
+		test_x = normaliseDataset(test_x)
+		
 	return datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y
 	
 
-def loadDatasetType3(datasetFileNameX, generatePOSunambiguousInput, onlyAddPOSunambiguousInputToTrain, useSmallSentenceLengths, dataType=float):
+def loadDatasetType3(datasetFileNameX, generatePOSunambiguousInput, onlyAddPOSunambiguousInputToTrain, useSmallSentenceLengths, dataType=float, normalise=False):
 		
 	padExamples = True
 	cropExamples = True
@@ -500,10 +516,10 @@ def loadDatasetType3(datasetFileNameX, generatePOSunambiguousInput, onlyAddPOSun
 		xPOStagActive = 1
 		xPOStagInactive = 0
 			
-	if(ANNtf2_globalDefs.testHarness):	
+	if(ANNtf_globalDefs.testHarness):	
 		#1 0 0 ... 0 0   0 1 0 ... 0 0 0  0 0 1 ... 0 0 1 			
-		line = np.zeros((ANNtf2_globalDefs.testHarnessNumWords*numberOfFeaturesPerWord), dataType)
-		for w in range(ANNtf2_globalDefs.testHarnessNumWords):
+		line = np.zeros((ANNtf_globalDefs.testHarnessNumWords*numberOfFeaturesPerWord), dataType)
+		for w in range(ANNtf_globalDefs.testHarnessNumWords):
 			line[numberOfFeaturesPerWord*w+w] = xPOStagActive
 		
 		template = [paddingCharacter] * maximumNumFeatures
@@ -670,7 +686,7 @@ def loadDatasetType3(datasetFileNameX, generatePOSunambiguousInput, onlyAddPOSun
 		all_Y = np.ones(datasetNumExamples, dtype=dataType)
 		#all_Y = np.expand_dims(all_Y, axis=0)
 
-	if(ANNtf2_globalDefs.testHarness):
+	if(ANNtf_globalDefs.testHarness):
 		datasetNumExamplesTrain = datasetNumExamples
 		datasetNumExamplesTest = 0
 	else:
@@ -707,6 +723,10 @@ def loadDatasetType3(datasetFileNameX, generatePOSunambiguousInput, onlyAddPOSun
 		#https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data?version=stable
 		#https://medium.com/@HojjatA/could-not-find-valid-device-for-node-while-eagerly-executing-8f2ff588d1e
 
+	if(normalise):
+		train_x = normaliseDataset(train_x)
+		test_x = normaliseDataset(test_x)
+		
 	return numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y
 
 
@@ -823,7 +843,7 @@ def equaliseClassExamples(xRaw, yRaw):
 	yRawClassFilteredList = []
 	
 	for classIndex in range(1, numberOfClasses+1):
-		xRawClassFiltered, yRawClassFiltered = ANNtf2_operations.filterNParraysByClassTarget(xRaw, yRaw, classTargetFilterIndex=classIndex)
+		xRawClassFiltered, yRawClassFiltered = ANNtf_operations.filterNParraysByClassTarget(xRaw, yRaw, classTargetFilterIndex=classIndex)
 		xRawClassFiltered = xRawClassFiltered[0:classIndexCountMinValue] 
 		yRawClassFiltered = yRawClassFiltered[0:classIndexCountMinValue]
 		xRawClassFilteredList.append(xRawClassFiltered)

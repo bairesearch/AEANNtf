@@ -24,9 +24,9 @@ Greedy layer construction using autoencoders
 import tensorflow as tf
 import numpy as np
 import copy
-from ANNtf2_operations import *	#generateParameterNameSeq, generateParameterName, defineNetworkParameters
-import ANNtf2_operations
-import ANNtf2_globalDefs
+from ANNtf_operations import *	#generateParameterNameSeq, generateParameterName, defineNetworkParameters
+import ANNtf_operations
+import ANNtf_globalDefs
 #import LIANNtf_algorithmLIANN_math	#required for supportDimensionalityReduction
 np.set_printoptions(suppress=True)
 
@@ -151,7 +151,7 @@ def defineNetworkParameters(num_input_neurons, num_output_neurons, datasetNumFea
 		else:
 			numberOfLayers = 2
 			
-	n_h, numberOfLayers, numberOfNetworks, datasetNumClasses = ANNtf2_operations.defineNetworkParametersDynamic(num_input_neurons, num_output_neurons, datasetNumFeatures, dataset, numberOfNetworksSet, numberOfLayers, firstHiddenLayerNumberNeurons, generateNetworkStatic)
+	n_h, numberOfLayers, numberOfNetworks, datasetNumClasses = ANNtf_operations.defineNetworkParametersDynamic(num_input_neurons, num_output_neurons, datasetNumFeatures, dataset, numberOfNetworksSet, numberOfLayers, firstHiddenLayerNumberNeurons, generateNetworkStatic)
 			
 	return numberOfLayers
 	
@@ -195,11 +195,11 @@ def defineNeuralNetworkParameters():
 			Blayer = tf.zeros(n_h[numberOfLayers])
 			BallNetworksFinalLayer	= tf.Variable(Blayer)	#not currently used
 			
-def neuralNetworkPropagation(x, networkIndex=1):	#this general function is not used (specific functions called by ANNtf2)
+def neuralNetworkPropagation(x, networkIndex=1):	#this general function is not used (specific functions called by ANNtf)
 	return neuralNetworkPropagationAEANNfinalLayer(x, networkIndex=networkIndex)
 	#return neuralNetworkPropagationAEANNtest(x, networkIndex=1)
 
-#if(ANNtf2_algorithm.supportMultipleNetworks):
+#if(ANNtf_algorithm.supportMultipleNetworks):
 def neuralNetworkPropagationLayer(x, networkIndex=1, l=None):
    pred, _ = neuralNetworkPropagationAEANN(x, autoencoder=False, layer=l, networkIndex=networkIndex)
    return pred
