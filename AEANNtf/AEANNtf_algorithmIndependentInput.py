@@ -43,8 +43,13 @@ learningAlgorithmNone = False	#create a very large network (eg x10) neurons per 
 #learningAlgorithmRUANNSUANN = False	#incomplete #perform stocastic update of weights (SUANN) based on RUANN (hypothetical AEANN hidden layer neuron activation/relaxation state modifications)
 
 #intialise network properties (configurable);	
+autoencoderPrediction = "previousLayer"	#autoencoder (backwards connections) predicts previous layer	#orig AEANNtf/AEANNpt implementation
+#autoencoderPrediction = "inputLayer" 	#autoencoder (backwards connections) predicts input layer 	#orig AEORtf autoencoder_simulation2 implementation
 supportSkipLayers = True #fully connected skip layer network
-
+if(supportSkipLayers):
+	autoencoderPrediction = "allPreviousLayers"		#optional	#orig AEANNtf implementation
+	pass
+	
 supportMultipleNetworks = True	#optional (required to activate set trainMultipleNetworks=True in AEANNtf_main)
 
 
@@ -95,9 +100,8 @@ B = {}
 if(supportMultipleNetworks):
 	WallNetworksFinalLayer = None
 	BallNetworksFinalLayer = None
-if(supportSkipLayers):
-	Ztrace = {}
-	Atrace = {}
+Ztrace = {}
+Atrace = {}
 	
 #Network parameters
 n_h = []
@@ -170,21 +174,33 @@ def defineNeuralNetworkParameters():
 				for l2 in range(0, l1):
 					if(l2 < l1):
 						WlayerF = randomNormal([n_h[l2], n_h[l1]]) 
-						WlayerB = randomNormal([n_h[l1], n_h[l2]]) 
 						Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")] = tf.Variable(WlayerF)
-						Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")] = tf.Variable(WlayerB)			
+						if(autoencoderPrediction=="allPreviousLayers"):
+							WlayerB = randomNormal([n_h[l1], n_h[l2]]) 
+							Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")] = tf.Variable(WlayerB)	
+				if(autoencoderPrediction!="allPreviousLayers"):
+					if(autoencoderPrediction=="previousLayer"):
+						l2 = l1-1
+					elif(autoencoderPrediction=="inputLayer"):
+						l2 = 0
+					WlayerB = randomNormal([n_h[l1], n_h[l2]]) 
+					Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")] = tf.Variable(WlayerB)
 			else:
-				WlayerF = randomNormal([n_h[l1-1], n_h[l1]]) 
-				WlayerB = randomNormal([n_h[l1], n_h[l1-1]]) 
+				l2 = l1-1
+				WlayerF = randomNormal([n_h[l2], n_h[l1]]) 
+				if(autoencoderPrediction=="previousLayer"):
+					l2 = l1-1
+				elif(autoencoderPrediction=="inputLayer"):
+					l2 = 0
+				WlayerB = randomNormal([n_h[l1], n_h[l2]]) 
 				Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")] = tf.Variable(WlayerF)
 				Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")] = tf.Variable(WlayerB)
 				
 			Blayer = tf.zeros(n_h[l1])
 			B[generateParameterNameNetwork(networkIndex, l1, "B")] = tf.Variable(Blayer)
 
-			if(supportSkipLayers):
-				Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
-				Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
+			Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
+			Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
 	
 	if(supportMultipleNetworks):
 		if(numberOfNetworks > 1):
@@ -224,8 +240,7 @@ def neuralNetworkPropagationAllNetworksFinalLayer(AprevLayer):
 #def neuralNetworkPropagationAEANNdimensionalityReduction(x, networkIndex=1):
 #
 #	AprevLayer = x
-#	if(supportSkipLayers):
-#		Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")] = AprevLayer
+#	Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")] = AprevLayer
 #		
 #	for l1 in range(1, numberOfLayers):	#ignore first/last layer
 #		
@@ -234,9 +249,8 @@ def neuralNetworkPropagationAllNetworksFinalLayer(AprevLayer):
 #		LIANNtf_algorithmLIANN_math.neuronActivationCorrelationMinimisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=Wb, Wbname="Wb", updateAutoencoderBackwardsWeights=True, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, maxCorrelation=maxCorrelation)
 #		
 #		AprevLayer = A	#CHECKTHIS: note uses A value prior to weight updates
-#		if(supportSkipLayers):
-#			Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = Z
-#			Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = A
+#		Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = Z
+#		Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = A
 
 			
 def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):
@@ -247,8 +261,7 @@ def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):
 	outputPred = x #in case layer=0
 	
 	AprevLayer = x
-	if(supportSkipLayers):
-		Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")] = AprevLayer
+	Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")] = AprevLayer
 	
 	if(autoencoder):
 		maxLayer = layer
@@ -277,9 +290,8 @@ def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):
 		A = tf.stop_gradient(A)	#only train weights for layer l1
 
 		AprevLayer = A
-		if(supportSkipLayers):
-			Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = Z
-			Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = A
+		Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = Z
+		Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = A
 			
 	return outputPred, outputTarget
 
@@ -294,23 +306,33 @@ def neuralNetworkPropagationLayerForward(l1, AprevLayer, autoencoder, networkInd
 			WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
 			Z = tf.add(Z, tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF))	
 			if(autoencoder):
-				outputTargetListPartial = Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")]
-				outputTargetList.append(outputTargetListPartial)
+				if(autoencoderPrediction=="allPreviousLayers"):
+					outputTargetListPartial = Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")]
+					outputTargetList.append(outputTargetListPartial)
 		Z = tf.add(Z, B[generateParameterNameNetwork(networkIndex, l1, "B")])
 		if(autoencoder):
-			outputTarget = tf.concat(outputTargetList, axis=1)
-			#print("outputTarget.shape = ", outputTarget.shape)
+			if(autoencoderPrediction=="allPreviousLayers"):
+				outputTarget = tf.concat(outputTargetList, axis=1)
+				#print("outputTarget.shape = ", outputTarget.shape)
+			if(autoencoderPrediction=="previousLayer"):
+				outputTarget = AprevLayer
+			elif(autoencoderPrediction=="inputLayer"):
+				outputTarget = Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")]
 	else:	
 		WlayerF = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")]
 		if(autoencoder):
-			outputTarget = AprevLayer
+			if(autoencoderPrediction=="previousLayer"):
+				outputTarget = AprevLayer
+			elif(autoencoderPrediction=="inputLayer"):
+				outputTarget = Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")]
+		Bs = B[generateParameterNameNetwork(networkIndex, l1, "B")]
 		Z = tf.add(tf.matmul(AprevLayer, WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")])
 	A = activationFunction(Z)
 	
 	return A, Z, outputTarget
 
 def neuralNetworkPropagationLayerBackwardAutoencoder(l1, A, networkIndex=1):
-	if(supportSkipLayers):
+	if(supportSkipLayers and autoencoderPrediction=="allPreviousLayers"):
 		outputPredList = []
 		for l2 in range(0, l1):
 			WlayerB = Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")]

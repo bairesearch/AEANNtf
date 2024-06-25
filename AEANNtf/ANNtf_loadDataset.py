@@ -137,12 +137,12 @@ import tensorflow as tf
 import numpy as np
 from numpy import genfromtxt
 import ANNtf_globalDefs
-#from nltk import tokenize	#required for ANNtf_loadDataset loadDatasetType4 only
+from nltk import tokenize	#required for ANNtf_loadDataset loadDatasetType4 only
 import re
 import ANNtf_operations
 
 
-datasetFolderRelative = "datasets"
+datasetFolderRelative = "../datasets"
 
 GIA_PREPROCESSOR_POS_TYPE_ARRAY_NUMBER_OF_TYPES = 52
 GIA_PREPROCESSOR_POS_TAGGER_DATABASE_POS_NUMBER_OF_TYPES = GIA_PREPROCESSOR_POS_TYPE_ARRAY_NUMBER_OF_TYPES+1	#includes GIA_PREPROCESSOR_POS_TAGGER_DATABASE_POS_INDEX_OUT_OF_SENTENCE_BOUNDS

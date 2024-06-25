@@ -2,7 +2,7 @@
 
 ### Author
 
-Richard Bruce Baxter - Copyright (c) 2021-2022 Baxter AI (baxterai.com)
+Richard Bruce Baxter - Copyright (c) 2021-2024 Baxter AI (baxterai.com)
 
 ### Description
 

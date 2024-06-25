@@ -260,8 +260,12 @@ def executeOptimisation(x, y, datasetNumClasses, numberOfLayers, optimizer, netw
 			for l2 in range(0, l1):
 				if(l2 < l1):
 					Wlist.append(AEANNtf_algorithm.Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")])
-					if(l1 != numberOfLayers):
-						Wlist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")])
+					if(AEANNtf_algorithm.autoencoderPrediction=="allPreviousLayers"):
+						if(l1 != numberOfLayers):
+							Wlist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")])
+			if(AEANNtf_algorithm.autoencoderPrediction!="allPreviousLayers"):
+				if(l1 != numberOfLayers):
+					Wlist.append(AEANNtf_algorithm.Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")])
 		else:
 			Wlist.append(AEANNtf_algorithm.Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")])
 			if(l1 != numberOfLayers):
@@ -591,7 +595,7 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 
 			#greedy code;
 			for l in range(1, maxLayer+1):
-				print("l = ", l)
+				#print("l = ", l)
 				trainData = generateTFtrainDataFromNParrays(train_x, train_y, shuffleSize, batchSize)
 				trainDataList = []
 				trainDataList.append(trainData)
