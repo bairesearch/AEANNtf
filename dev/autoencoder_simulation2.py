@@ -54,7 +54,7 @@ print (x_test.shape)
 useActivationFunctionF = True   #optional
 autoencoderPrediction = "inputLayer"    #required (AEORtf uses no supervised output, so must predict inputLayer)
 
-numberOfLayers=4
+numberOfLayers = 10
 numberOfEpochs = 10
 batchSize = 32
 
@@ -90,10 +90,10 @@ class EncoderLX(Model):
 
   def call(self, inputs):
     x, inputLayer, AprevLayerAll = inputs
+    if(self.layerIndex > 0):
+        AprevLayerAll = tf.transpose(AprevLayerAll, perm=[2, 0, 1])
     if(supportSkipLayers):
         for i in range(self.layerIndex+1):
-            if(i == 1):
-                AprevLayerAll = tf.transpose(AprevLayerAll, perm=[2, 0, 1]) #keras functions require first dimension to be batchSize
             if(i > 0):
                 Zpartial = self.encoders[i](AprevLayerAll[i-1]) #i-1: AprevLayerAll is defined without inputLayer
                 encoded = tf.keras.layers.Add()([encoded, Zpartial])    #encoded = encoded + Zpartial
@@ -108,6 +108,39 @@ class EncoderLX(Model):
         encoded = self.encoderact(encoded)
     return encoded
 
+class DecoderLX(Model):
+  def __init__(self, latent_dim, io_dim, layerIndex):
+    super(DecoderLX, self).__init__()
+    self.layerIndex = layerIndex
+    self.io_dim = io_dim
+    self.latent_dim = latent_dim
+    if(supportSkipLayers):
+        self.decoders = []
+        for i in range(layerIndex+1):
+            decoder = tf.keras.Sequential([layers.Dense(io_dim[0]*io_dim[1], activation=None),
+                                        layers.Reshape((io_dim[0], io_dim[1])),])
+            self.decoders.append(decoder)
+    else:
+        self.decoder = tf.keras.Sequential([layers.Dense(io_dim[0]*io_dim[1], activation=None),
+                                        layers.Reshape((io_dim[0], io_dim[1])),])
+    self.decoderact = tf.keras.layers.Activation('sigmoid')
+
+  def call(self, inputs):
+    x, AprevLayerAll = inputs
+    AprevLayerAll = tf.transpose(AprevLayerAll, perm=[2, 0, 1])
+    if(supportSkipLayers):
+        for i in range(self.layerIndex+1):
+            Zpartial = self.decoders[i](AprevLayerAll[i]) #AprevLayerAll is defined without inputLayer
+            if(i > 0):
+                decoded = tf.keras.layers.Add()([decoded, Zpartial])    #decoded = decoded + Zpartial
+            else:
+                decoded = Zpartial
+    else:
+        decoded = self.decoder(x)
+        #if(residualConnections):
+        #    decoded = tf.keras.layers.Average()([decoded, AprevLayerAll])
+    decoded = self.decoderact(decoded)
+    return decoded
 
 class AutoencoderLX(Model):
   def __init__(self, latent_dim, io_dim, layerIndex):
@@ -115,13 +148,39 @@ class AutoencoderLX(Model):
     self.layerIndex = layerIndex
     self.latent_dim = latent_dim
     self.encoder = EncoderLX(latent_dim, io_dim, layerIndex)
-    self.decoder = tf.keras.Sequential([layers.Dense(io_dim[0]*io_dim[1], activation='sigmoid'),
-                                        layers.Reshape((io_dim[0], io_dim[1])),])
+    self.decoder = DecoderLX(latent_dim, io_dim, layerIndex)
 
   def call(self, inputs):
+    x, inputLayer, AprevLayerAll = inputs
     encoded = self.encoder(inputs)
-    decoded = self.decoder(encoded)
+    if(self.layerIndex > 0):
+        AprevLayerAll = tf.concat((AprevLayerAll, tf.expand_dims(encoded, axis=-1)), axis=-1)
+    else:
+        AprevLayerAll = tf.expand_dims(encoded, axis=-1)
+    hidden = [encoded, AprevLayerAll]
+    decoded = self.decoder(hidden)
     return decoded
+
+def printOutput(decoded_imgs):
+    n = 10
+    plt.figure(figsize=(20, 4))
+    for i in range(n):
+        # display original
+        ax = plt.subplot(2, n, i + 1)
+        plt.imshow(x_test[i])
+        plt.title("original")
+        plt.gray()
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+        # display reconstruction
+        ax = plt.subplot(2, n, i + 1 + n)
+        plt.imshow(decoded_imgs[i])
+        plt.title("reconstructed")
+        plt.gray()
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+    plt.show()
 
 x = x_train
 xv = x_test
@@ -145,23 +204,4 @@ for l in range(numberOfLayers):
     x = autoencoderLX.encoder.predict([x, inputLayer, AprevLayerAll])
     xv = autoencoderLX.encoder.predict([xv, inputLayerV, AprevLayerAllV])
     decoded_imgs = outv
-
-n = 10
-plt.figure(figsize=(20, 4))
-for i in range(n):
-  # display original
-  ax = plt.subplot(2, n, i + 1)
-  plt.imshow(x_test[i])
-  plt.title("original")
-  plt.gray()
-  ax.get_xaxis().set_visible(False)
-  ax.get_yaxis().set_visible(False)
-
-  # display reconstruction
-  ax = plt.subplot(2, n, i + 1 + n)
-  plt.imshow(decoded_imgs[i])
-  plt.title("reconstructed")
-  plt.gray()
-  ax.get_xaxis().set_visible(False)
-  ax.get_yaxis().set_visible(False)
-plt.show()
+    printOutput(decoded_imgs)
