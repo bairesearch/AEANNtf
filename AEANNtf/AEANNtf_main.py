@@ -258,12 +258,14 @@ def executeOptimisation(x, y, datasetNumClasses, numberOfLayers, optimizer, netw
 		Blist = []
 		if(AEANNtf_algorithm.supportSkipLayers):
 			for l2 in range(0, l1):
-				if(l2 < l1):
+				if(AEANNtf_algorithm.supportSkipLayersF):
 					Wlist.append(AEANNtf_algorithm.Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")])
+				if(l1 != numberOfLayers):
 					if(AEANNtf_algorithm.autoencoderPrediction=="allPreviousLayers"):
-						if(l1 != numberOfLayers):
-							Wlist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")])
-			if(AEANNtf_algorithm.autoencoderPrediction!="allPreviousLayers"):
+						Wlist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")])
+					elif(AEANNtf_algorithm.supportSkipLayersB):
+						Wlist.append(AEANNtf_algorithm.Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")])
+			if(not AEANNtf_algorithm.supportSkipLayersB and AEANNtf_algorithm.autoencoderPrediction!="allPreviousLayers"):
 				if(l1 != numberOfLayers):
 					Wlist.append(AEANNtf_algorithm.Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")])
 		else:
@@ -388,10 +390,11 @@ def calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossE
 			#print("2 loss = ", loss)
 			#print("2 acc = ", acc)
 		else:
+			#print("l = ", l)
 			pred, target = AEANNtf_algorithm.neuralNetworkPropagationAEANNautoencoderLayer(x, l, networkIndex)
+			#print("target.shape = ", target.shape)
+			#print("pred.shape = ", pred.shape)
 			loss = calculateLossMeanSquaredError(pred, target)
-			#print("target = ", target)
-			#print("pred = ", pred)
 			#print("1 loss = ", loss)
 	elif(algorithmAEANN == "AEANNsequentialInput"):
 		if(autoencoder):

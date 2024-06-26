@@ -48,7 +48,14 @@ autoencoderPrediction = "previousLayer"	#autoencoder (backwards connections) pre
 supportSkipLayers = True #fully connected skip layer network
 if(supportSkipLayers):
 	autoencoderPrediction = "allPreviousLayers"		#optional	#orig AEANNtf implementation
-	pass
+	supportSkipLayersF = True
+	if(autoencoderPrediction == "allPreviousLayers"):
+		supportSkipLayersB = False
+	else:
+		supportSkipLayersB = True	#optional	#add full connectivity to decoder	#not in orig AEANNtf/AEANNpt implementation
+else:
+	supportSkipLayersF = False
+	supportSkipLayersB = False
 	
 supportMultipleNetworks = True	#optional (required to activate set trainMultipleNetworks=True in AEANNtf_main)
 
@@ -172,13 +179,20 @@ def defineNeuralNetworkParameters():
 			#forward excitatory connections;
 			if(supportSkipLayers):
 				for l2 in range(0, l1):
-					if(l2 < l1):
+					if(supportSkipLayersF):
 						WlayerF = randomNormal([n_h[l2], n_h[l1]]) 
 						Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")] = tf.Variable(WlayerF)
-						if(autoencoderPrediction=="allPreviousLayers"):
-							WlayerB = randomNormal([n_h[l1], n_h[l2]]) 
-							Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")] = tf.Variable(WlayerB)	
-				if(autoencoderPrediction!="allPreviousLayers"):
+					if(autoencoderPrediction=="allPreviousLayers"):
+						WlayerB = randomNormal([n_h[l1], n_h[l2]]) 
+						Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")] = tf.Variable(WlayerB)	
+					elif(supportSkipLayersB):
+						if(autoencoderPrediction=="previousLayer"):
+							l3 = l1-1
+						elif(autoencoderPrediction=="inputLayer"):
+							l3 = 0
+						WlayerB = randomNormal([n_h[l2+1], n_h[l3]]) 
+						Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")] = tf.Variable(WlayerB)	
+				if(not supportSkipLayersB and autoencoderPrediction!="allPreviousLayers"):
 					if(autoencoderPrediction=="previousLayer"):
 						l2 = l1-1
 					elif(autoencoderPrediction=="inputLayer"):
@@ -262,6 +276,7 @@ def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):
 	
 	AprevLayer = x
 	Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")] = AprevLayer
+	Ztrace[generateParameterNameNetwork(networkIndex, 0, "Ztrace")] = tf.zeros(AprevLayer.shape)	#set to zero as not used (just used for shape initialisation)
 	
 	if(autoencoder):
 		maxLayer = layer
@@ -272,7 +287,8 @@ def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):
 			maxLayer = layer
 		
 	for l1 in range(1, maxLayer+1):
-
+		#print("l1 = ", l1)
+		
 		A, Z, outputTarget = neuralNetworkPropagationLayerForward(l1, AprevLayer, autoencoder, networkIndex)
 
 		if(autoencoder):
@@ -298,33 +314,27 @@ def neuralNetworkPropagationAEANN(x, autoencoder, layer, networkIndex=1):
 def neuralNetworkPropagationLayerForward(l1, AprevLayer, autoencoder, networkIndex=1):
 	outputTarget = None
 	
-	if(supportSkipLayers):
-		if(autoencoder):
+	if(autoencoder):
+		if(autoencoderPrediction=="allPreviousLayers"):
 			outputTargetList = []
+			for l2 in range(0, l1):
+				outputTargetListPartial = Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")]
+				outputTargetList.append(outputTargetListPartial)
+			outputTarget = tf.concat(outputTargetList, axis=1)
+			#print("outputTarget.shape = ", outputTarget.shape)
+		if(autoencoderPrediction=="previousLayer"):
+			outputTarget = AprevLayer
+		elif(autoencoderPrediction=="inputLayer"):
+			outputTarget = Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")]
+	
+	if(supportSkipLayersF):
 		Z = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")].shape)
 		for l2 in range(0, l1):
 			WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
 			Z = tf.add(Z, tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF))	
-			if(autoencoder):
-				if(autoencoderPrediction=="allPreviousLayers"):
-					outputTargetListPartial = Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")]
-					outputTargetList.append(outputTargetListPartial)
 		Z = tf.add(Z, B[generateParameterNameNetwork(networkIndex, l1, "B")])
-		if(autoencoder):
-			if(autoencoderPrediction=="allPreviousLayers"):
-				outputTarget = tf.concat(outputTargetList, axis=1)
-				#print("outputTarget.shape = ", outputTarget.shape)
-			if(autoencoderPrediction=="previousLayer"):
-				outputTarget = AprevLayer
-			elif(autoencoderPrediction=="inputLayer"):
-				outputTarget = Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")]
 	else:	
 		WlayerF = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")]
-		if(autoencoder):
-			if(autoencoderPrediction=="previousLayer"):
-				outputTarget = AprevLayer
-			elif(autoencoderPrediction=="inputLayer"):
-				outputTarget = Atrace[generateParameterNameNetwork(networkIndex, 0, "Atrace")]
 		Bs = B[generateParameterNameNetwork(networkIndex, l1, "B")]
 		Z = tf.add(tf.matmul(AprevLayer, WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")])
 	A = activationFunction(Z)
@@ -332,7 +342,7 @@ def neuralNetworkPropagationLayerForward(l1, AprevLayer, autoencoder, networkInd
 	return A, Z, outputTarget
 
 def neuralNetworkPropagationLayerBackwardAutoencoder(l1, A, networkIndex=1):
-	if(supportSkipLayers and autoencoderPrediction=="allPreviousLayers"):
+	if(autoencoderPrediction=="allPreviousLayers"):
 		outputPredList = []
 		for l2 in range(0, l1):
 			WlayerB = Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")]
@@ -342,6 +352,20 @@ def neuralNetworkPropagationLayerBackwardAutoencoder(l1, A, networkIndex=1):
 			outputPredList.append(outputPredPartial)
 		outputPred = tf.concat(outputPredList, axis=1)
 		#print("outputPred.shape = ", outputPred.shape)
+	elif(supportSkipLayersB):
+		if(autoencoderPrediction=="inputLayer"):
+			Zback = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, 0, "Ztrace")].shape)
+		elif(autoencoderPrediction=="previousLayer"):
+			Zback = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1-1, "Ztrace")].shape)
+		for l2 in range(0, l1):
+			WlayerB = Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wb")]
+			if(l2 == l1-1):
+				Apartial = A #allow backprop through current encoder layer only
+			else:
+				Apartial = Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")]
+			ZbackPartial = tf.matmul(Apartial, WlayerB)
+			Zback = tf.add(Zback, ZbackPartial)	
+		outputPred = tf.nn.sigmoid(Zback)
 	else:
 		WlayerB = Wb[generateParameterNameNetwork(networkIndex, l1, "Wb")]
 		Zback = tf.matmul(A, WlayerB)
